@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import { useRouter } from "next/navigation"; // 1. นำเข้า useRouter
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { 
     LayoutGrid, 
@@ -10,7 +10,9 @@ import {
     ArrowLeft, 
     Palette,
     Loader2,
-    CheckCircle2
+    CheckCircle2,
+    Edit3,
+    X
 } from "lucide-react";
 
 interface Department {
@@ -28,8 +30,13 @@ export default function DepartmentsPage() {
     const [loading, setLoading] = useState<boolean>(true);
     const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
+    // Form State
     const [name, setName] = useState<string>("");
     const [color, setColor] = useState<string>("#3b82f6");
+    
+    // Edit State
+    const [isEditing, setIsEditing] = useState<boolean>(false);
+    const [editId, setEditId] = useState<string | null>(null);
 
     const fetchDepartments = async () => {
         setLoading(true);
@@ -48,26 +55,53 @@ export default function DepartmentsPage() {
         fetchDepartments();
     }, []);
 
-    const handleAddDepartment = async (e: React.FormEvent<HTMLFormElement>) => {
+    const resetForm = () => {
+        setName("");
+        setColor("#3b82f6");
+        setIsEditing(false);
+        setEditId(null);
+    };
+
+    const handleEditClick = (dept: Department) => {
+        setIsEditing(true);
+        setEditId(dept.id);
+        setName(dept.name);
+        setColor(dept.color_code);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         if (!name.trim()) return;
 
         try {
             setIsSubmitting(true);
-            const { error } = await supabase
-                .from("departments")
-                .insert([{ name: name.trim(), color_code: color }]);
-
-            if (error) {
-                if (error.code === '23505') alert("มีชื่อแผนกนี้อยู่ในระบบแล้ว");
-                else throw error;
+            
+            if (isEditing && editId) {
+                // โหมดแก้ไข
+                const { error } = await supabase
+                    .from("departments")
+                    .update({ name: name.trim(), color_code: color })
+                    .eq("id", editId);
+                
+                if (error) throw error;
             } else {
-                setName("");
-                fetchDepartments();
+                // โหมดเพิ่มใหม่
+                const { error } = await supabase
+                    .from("departments")
+                    .insert([{ name: name.trim(), color_code: color }]);
+
+                if (error) {
+                    if (error.code === '23505') return alert("มีชื่อแผนกนี้อยู่ในระบบแล้ว");
+                    throw error;
+                }
             }
+            
+            resetForm();
+            fetchDepartments();
         } catch (err) {
             console.error(err);
-            alert("ไม่สามารถเพิ่มแผนกได้");
+            alert(isEditing ? "ไม่สามารถแก้ไขข้อมูลได้" : "ไม่สามารถเพิ่มแผนกได้");
         } finally {
             setIsSubmitting(false);
         }
@@ -84,6 +118,7 @@ export default function DepartmentsPage() {
         if (error) {
             alert("ไม่สามารถลบได้เนื่องจากมีการใช้งานอยู่");
         } else {
+            if (editId === id) resetForm();
             fetchDepartments();
         }
     };
@@ -99,13 +134,15 @@ export default function DepartmentsPage() {
                     ย้อนกลับ
                 </button>
 
-                <div className="flex items-center gap-4">
-                    <div className="p-3 bg-indigo-600 rounded-2xl text-white shadow-lg shadow-indigo-200">
-                        <LayoutGrid size={28} />
-                    </div>
-                    <div>
-                        <h1 className="text-3xl font-black text-slate-900 tracking-tight">จัดการแผนก</h1>
-                        <p className="text-slate-500 font-bold text-sm">กำหนดชื่อแผนกและสีสัญลักษณ์ประจำสายงาน</p>
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                        <div className="p-3 bg-indigo-600 rounded-2xl text-white shadow-lg shadow-indigo-200">
+                            <LayoutGrid size={28} />
+                        </div>
+                        <div>
+                            <h1 className="text-3xl font-black text-slate-900 tracking-tight">จัดการแผนก</h1>
+                            <p className="text-slate-500 font-bold text-sm">กำหนดชื่อแผนกและสีสัญลักษณ์ประจำสายงาน</p>
+                        </div>
                     </div>
                 </div>
             </header>
@@ -113,12 +150,27 @@ export default function DepartmentsPage() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <section className="lg:col-span-1">
                     <form 
-                        onSubmit={handleAddDepartment}
-                        className="bg-white p-6 rounded-[2.5rem] border-4 border-white shadow-xl shadow-slate-200/60 sticky top-8"
+                        onSubmit={handleSubmit}
+                        className={`bg-white p-6 rounded-[2.5rem] border-4 transition-all duration-300 shadow-xl shadow-slate-200/60 sticky top-8 ${isEditing ? 'border-orange-400' : 'border-white'}`}
                     >
-                        <h2 className="text-lg font-black text-slate-900 mb-6 flex items-center gap-2">
-                            <Plus size={20} className="text-indigo-600" /> เพิ่มแผนกใหม่
-                        </h2>
+                        <div className="flex items-center justify-between mb-6">
+                            <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                                {isEditing ? (
+                                    <>
+                                        <Edit3 size={20} className="text-orange-500" /> แก้ไขแผนก
+                                    </>
+                                ) : (
+                                    <>
+                                        <Plus size={20} className="text-indigo-600" /> เพิ่มแผนกใหม่
+                                    </>
+                                )}
+                            </h2>
+                            {isEditing && (
+                                <button type="button" onClick={resetForm} className="text-slate-400 hover:text-slate-600">
+                                    <X size={20} />
+                                </button>
+                            )}
+                        </div>
 
                         <div className="space-y-5">
                             <div>
@@ -154,11 +206,25 @@ export default function DepartmentsPage() {
                             <button 
                                 type="submit"
                                 disabled={isSubmitting}
-                                className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white rounded-2xl font-black shadow-lg shadow-indigo-100 transition-all active:scale-95 flex items-center justify-center gap-2"
+                                className={`w-full py-4 text-white rounded-2xl font-black shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 ${
+                                    isEditing 
+                                    ? 'bg-orange-500 hover:bg-orange-600 shadow-orange-100' 
+                                    : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-100'
+                                }`}
                             >
                                 {isSubmitting ? <Loader2 className="animate-spin" /> : <CheckCircle2 size={20} />}
-                                บันทึกแผนก
+                                {isEditing ? "อัปเดตข้อมูล" : "บันทึกแผนก"}
                             </button>
+                            
+                            {isEditing && (
+                                <button 
+                                    type="button" 
+                                    onClick={resetForm}
+                                    className="w-full text-center text-sm font-bold text-slate-400 hover:text-slate-600"
+                                >
+                                    ยกเลิกการแก้ไข
+                                </button>
+                            )}
                         </div>
                     </form>
                 </section>
@@ -179,7 +245,7 @@ export default function DepartmentsPage() {
                                 departments.map((dept) => (
                                     <div 
                                         key={dept.id}
-                                        className="p-5 flex items-center justify-between hover:bg-slate-50 transition-colors group"
+                                        className={`p-5 flex items-center justify-between hover:bg-slate-50 transition-colors group ${editId === dept.id ? 'bg-orange-50/50' : ''}`}
                                     >
                                         <div className="flex items-center gap-4">
                                             <div 
@@ -194,13 +260,22 @@ export default function DepartmentsPage() {
                                             </div>
                                         </div>
 
-                                        <button 
-                                            onClick={() => handleDelete(dept.id, dept.name)}
-                                            className="p-3 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all"
-                                            title="ลบแผนก"
-                                        >
-                                            <Trash2 size={20} />
-                                        </button>
+                                        <div className="flex items-center gap-2">
+                                            <button 
+                                                onClick={() => handleEditClick(dept)}
+                                                className="p-3 text-slate-300 hover:text-orange-500 hover:bg-orange-50 rounded-xl transition-all"
+                                                title="แก้ไขแผนก"
+                                            >
+                                                <Edit3 size={20} />
+                                            </button>
+                                            <button 
+                                                onClick={() => handleDelete(dept.id, dept.name)}
+                                                className="p-3 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all"
+                                                title="ลบแผนก"
+                                            >
+                                                <Trash2 size={20} />
+                                            </button>
+                                        </div>
                                     </div>
                                 ))
                             ) : (

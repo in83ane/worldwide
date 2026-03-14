@@ -6,13 +6,12 @@ import { createClient } from "@/lib/supabase/client";
 import {
     Search, X, Clock, Briefcase,
     Pencil, Trash2, Maximize, Minimize, Users, Loader2, CheckCircle2,
-    Save, Settings, User, PlusCircle, CircleDollarSign, MapPin, Undo2,
+    Save, Settings, User, CircleDollarSign, MapPin, Undo2,
     PlusIcon
 } from 'lucide-react';
 import Link from "next/link";
 
 interface Department { id: string; name: string; color_code: string; }
-
 
 interface Employee { 
     id: string; 
@@ -38,6 +37,12 @@ interface WorkForm {
     current_worker_input: string;
     selected_workers: string[];
 }
+
+// ฟังก์ชันสำหรับสร้าง Avatar สำรองเหมือนหน้า Employees
+const getAvatarUrl = (name: string) => {
+    const displayName = name?.trim() || "Staff";
+    return `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random&color=fff&size=200&font-size=0.35`;
+};
 
 function getThaiShift(timeStr: string): string {
     const [h] = (timeStr || "08:30").split(":").map(Number);
@@ -263,12 +268,13 @@ export default function HomePage() {
 
                 <div className="grid grid-cols-1 gap-6">
                     {filteredWork.map(item => {
-                        const deptColor = deptColorMap[item.worker_role] || '#ec4899';
+                        const deptColor = deptColorMap[item.worker_role] || '#585858';
                         const isOverdue = new Date(`${item.work_date}T${item.work_time}`) < new Date() && item.status === 'pending';
                         const isInProgress = item.status === 'inprogress';
                         const isComplete = item.status === 'complete';
 
-                        const empMatch = masterEmployees.find(e => item.worker?.includes(e.name));
+                        // แยกรายชื่อช่างเพื่อนำมาวนลูปแสดงรูป
+                        const workerList = item.worker ? item.worker.split(", ") : [];
 
                         return (
                             <div key={item.id} className={`relative bg-white rounded-[2.5rem] shadow-sm border-2 border-slate-50 overflow-hidden flex flex-col md:flex-row items-stretch transition-all hover:shadow-md ${isComplete ? 'opacity-70 grayscale-[0.5]' : ''}`}>
@@ -297,16 +303,34 @@ export default function HomePage() {
 
                                 <div className="w-full md:w-72 p-6 flex flex-col items-center justify-center border-l-2 border-slate-50 bg-slate-50/30">
                                     <div className="flex flex-col items-center text-center gap-3">
-                                        <div
-                                            className="w-16 h-16 rounded-2xl bg-white overflow-hidden border-4 shadow-md transition-all"
-                                            style={{ borderColor: deptColor }}
-                                        >
-                                            {empMatch?.image_url ? (
-                                                <img src={empMatch.image_url} className="w-full h-full object-cover" alt="worker" />
+                                        {/* Avatar Group แสดงรูปโปรไฟล์พนักงาน */}
+                                        <div className="flex -space-x-4 hover:space-x-1 transition-all duration-300 mb-2">
+                                            {workerList.length > 0 ? (
+                                                workerList.map((workerName, index) => {
+                                                    const emp = masterEmployees.find(e => e.name === workerName);
+                                                    return (
+                                                        <div 
+                                                            key={index}
+                                                            className="w-16 h-16 rounded-2xl bg-white overflow-hidden border-4 shadow-md transition-transform hover:-translate-y-1 relative"
+                                                            style={{ borderColor: deptColor, zIndex: 10 - index }}
+                                                        >
+                                                            <img 
+                                                                src={emp?.image_url || getAvatarUrl(workerName)} 
+                                                                className="w-full h-full object-cover" 
+                                                                alt={workerName} 
+                                                            />
+                                                        </div>
+                                                    );
+                                                })
                                             ) : (
-                                                <div className="w-full h-full flex items-center justify-center bg-white" style={{ color: deptColor }}><User size={32} /></div>
+                                                <div 
+                                                    className="w-16 h-16 rounded-2xl bg-white flex items-center justify-center border-4 border-slate-200 text-slate-300"
+                                                >
+                                                    <User size={32} />
+                                                </div>
                                             )}
                                         </div>
+
                                         <div>
                                             <p className="text-lg font-black text-slate-800 leading-tight">{item.worker || "รอมอบหมาย"}</p>
                                             <div className="mt-2 flex justify-center">

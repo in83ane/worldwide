@@ -4,11 +4,11 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from "react"
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
-    Users, ArrowLeft, Camera, Loader2, Plus, Edit3, Save, Search, UserX, RotateCcw
+    Users, ArrowLeft, Camera, Loader2, Plus, Edit3, Save, Search, UserX, RotateCcw, Mail, Lock
 } from "lucide-react";
 import Link from "next/link";
 
-// ระบุ Interface ให้ชัดเจน
+// --- ส่วนของ Interface ที่ปรับปรุงเพื่อแก้ตัวแดง ---
 interface Department { 
     id: string; 
     name: string; 
@@ -23,6 +23,17 @@ interface Employee {
     department_id: string | null;
     departments: Department | null;
     is_active: boolean;
+    user_id?: string | null; // เพิ่มรองรับ user_id
+}
+
+// กำหนดโครงสร้างข้อมูลสำหรับ Insert/Update
+interface EmployeePayload {
+    name: string;
+    department_id: string;
+    image_url: string | null;
+    is_active: boolean;
+    user_id?: string | null;
+    staff_id?: string; // ใส่ ? เพราะตอน update ไม่ต้องส่ง staff_id
 }
 
 export default function EmployeesPage() {
@@ -36,7 +47,15 @@ export default function EmployeesPage() {
     const [loading, setLoading] = useState<boolean>(true);
     const [uploading, setUploading] = useState<boolean>(false);
 
-    const [formData, setFormData] = useState({ name: "", staff_id: "", department_id: "" });
+    // เพิ่ม email, password ในฟอร์ม
+    const [formData, setFormData] = useState({ 
+        name: "", 
+        staff_id: "", 
+        department_id: "",
+        email: "",
+        password: "" 
+    });
+    
     const [file, setFile] = useState<File | null>(null);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
     const [isEditing, setIsEditing] = useState<boolean>(false);
@@ -47,7 +66,6 @@ export default function EmployeesPage() {
         return `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random&color=fff&size=200&font-size=0.35`;
     };
 
-    // แก้ไข Logic การดึงเลข ID: ตรวจสอบจากพนักงานทุกคน (รวมคนที่ Disabled อยู่)
     const getNextStaffId = useCallback(async () => {
         const { data } = await supabase
             .from("employees")
@@ -57,7 +75,6 @@ export default function EmployeesPage() {
 
         if (data && data.length > 0) {
             const lastId = parseInt(data[0].staff_id);
-            // ตรวจสอบว่าเป็นตัวเลขจริงหรือไม่ก่อนบวก
             return isNaN(lastId) ? "1" : (lastId + 1).toString();
         }
         return "1";
@@ -69,7 +86,7 @@ export default function EmployeesPage() {
         setPreviewUrl(null);
         setFile(null);
         const nextId = await getNextStaffId();
-        setFormData({ name: "", staff_id: nextId, department_id: "" });
+        setFormData({ name: "", staff_id: nextId, department_id: "", email: "", password: "" });
     }, [getNextStaffId]);
 
     const refreshData = useCallback(async () => {
@@ -135,24 +152,46 @@ export default function EmployeesPage() {
                 finalImageUrl = supabase.storage.from('employee-photos').getPublicUrl(`avatars/${fileName}`).data.publicUrl;
             }
 
-            const payload = {
+            let userIdForEmployee: string | null = null;
+
+            // สร้าง Auth User (เฉพาะกรณีเพิ่มใหม่)
+            if (!isEditing && formData.email && formData.password) {
+                const { data: authData, error: authError } = await supabase.auth.signUp({
+                    email: formData.email,
+                    password: formData.password,
+                });
+                if (authError) throw authError;
+                if (authData.user) {
+                    userIdForEmployee = authData.user.id;
+                    // อัปเดต email ในตาราง profiles ที่ถูกสร้างอัตโนมัติจาก Trigger (ถ้ามี)
+                    await supabase.from("profiles").update({ email: formData.email }).eq("id", userIdForEmployee);
+                }
+            }
+
+            // ใช้ Interface EmployeePayload แทน any เพื่อแก้ตัวแดง
+            const payload: EmployeePayload = {
                 name: formData.name.trim(),
                 department_id: formData.department_id,
                 image_url: finalImageUrl,
-                is_active: true
+                is_active: true,
+                user_id: userIdForEmployee
             };
 
             if (isEditing && editId) {
                 const { error: updateError } = await supabase.from("employees").update(payload).eq("id", editId);
                 if (updateError) throw updateError;
             } else {
-                const { error: insertError } = await supabase.from("employees").insert([{ ...payload, staff_id: formData.staff_id }]);
+                const { error: insertError } = await supabase.from("employees").insert([{ 
+                    ...payload, 
+                    staff_id: formData.staff_id 
+                }]);
                 if (insertError) throw insertError;
             }
             
+            alert(isEditing ? "อัปเดตข้อมูลสำเร็จ" : "เพิ่มพนักงานและสร้างบัญชีสำเร็จ");
             await resetForm();
             await refreshData();
-        } catch (err) { 
+        } catch (err: unknown) { 
             const error = err as Error;
             alert(error.message); 
         } finally { 
@@ -169,7 +208,7 @@ export default function EmployeesPage() {
                     <div className="p-3 bg-slate-900 rounded-2xl text-white shadow-xl"><Users size={24} /></div>
                     <div>
                         <h1 className="text-2xl font-black text-slate-900 tracking-tight">Staff Management</h1>
-                        <p className="text-slate-400 font-bold text-sm">จัดการพนักงานปัจจุบัน</p>
+                        <p className="text-slate-400 font-bold text-sm">จัดการพนักงานและบัญชีผู้ใช้</p>
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -196,26 +235,37 @@ export default function EmployeesPage() {
                             <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} />
                         </div>
                         <div className="space-y-4">
-                            <input type="text" placeholder="ชื่อ-นามสกุล..." className="w-full p-4 bg-slate-50 border-2 border-transparent focus:border-slate-900 rounded-2xl font-bold outline-none" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} required />
-                            <select className="w-full p-4 bg-slate-50 border-2 border-transparent focus:border-slate-900 rounded-2xl font-bold outline-none" value={formData.department_id} onChange={(e) => setFormData({ ...formData, department_id: e.target.value })} required>
-                                <option value="">เลือกแผนก...</option>
-                                {departments.map(dept => <option key={dept.id} value={dept.id}>{dept.name}</option>)}
-                            </select>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black uppercase text-slate-400 ml-2">ข้อมูลพนักงาน</label>
+                                <input type="text" placeholder="ชื่อ-นามสกุล..." className="w-full p-4 bg-slate-50 border-2 border-transparent focus:border-slate-900 rounded-2xl font-bold outline-none" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} required />
+                                <select className="w-full p-4 bg-slate-50 border-2 border-transparent focus:border-slate-900 rounded-2xl font-bold outline-none" value={formData.department_id} onChange={(e) => setFormData({ ...formData, department_id: e.target.value })} required>
+                                    <option value="">เลือกแผนก...</option>
+                                    {departments.map(dept => <option key={dept.id} value={dept.id}>{dept.name}</option>)}
+                                </select>
+                            </div>
                             
-                            <div className="flex gap-2">
+                            {/* แสดงส่วน Email/Password เฉพาะตอนเพิ่มพนักงานใหม่ */}
+                            {!isEditing && (
+                                <div className="space-y-2 pt-2 border-t-2 border-slate-50">
+                                    <label className="text-[10px] font-black uppercase text-slate-400 ml-2">บัญชีเข้าใช้งาน (Role: User)</label>
+                                    <div className="relative">
+                                        <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
+                                        <input type="email" placeholder="Email พนักงาน" className="w-full pl-12 p-4 bg-slate-50 border-2 border-transparent focus:border-slate-900 rounded-2xl font-bold outline-none" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} required={!isEditing} />
+                                    </div>
+                                    <div className="relative">
+                                        <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
+                                        <input type="password" placeholder="Password (6+ ตัวอักษร)" className="w-full pl-12 p-4 bg-slate-50 border-2 border-transparent focus:border-slate-900 rounded-2xl font-bold outline-none" value={formData.password} onChange={(e) => setFormData({ ...formData, password: e.target.value })} required={!isEditing} minLength={6} />
+                                    </div>
+                                </div>
+                            )}
+                            
+                            <div className="flex gap-2 pt-4">
                                 <button type="submit" disabled={uploading} className={`flex-grow py-4 text-white rounded-[1.5rem] font-black shadow-xl flex items-center justify-center gap-2 transition-all ${isEditing ? 'bg-orange-500 hover:bg-orange-600' : 'bg-slate-900 hover:bg-slate-800'}`}>
                                     {uploading ? <Loader2 className="animate-spin" size={20} /> : (isEditing ? <Save size={20} /> : <Plus size={20} />)}
-                                    {isEditing ? "อัปเดตข้อมูล" : "เพิ่มพนักงาน"}
+                                    {isEditing ? "อัปเดตข้อมูล" : "สร้างพนักงานและบัญชี"}
                                 </button>
-                                
                                 {isEditing && (
-                                    <button 
-                                        type="button" 
-                                        onClick={resetForm}
-                                        className="px-5 py-4 bg-slate-100 text-slate-500 rounded-[1.5rem] font-black hover:bg-slate-200 hover:text-slate-700 transition-all flex items-center justify-center gap-2 shadow-sm"
-                                    >
-                                        <RotateCcw size={18} /> ยกเลิกแก้ไข
-                                    </button>
+                                    <button type="button" onClick={resetForm} className="px-5 py-4 bg-slate-100 text-slate-500 rounded-[1.5rem] font-black hover:bg-slate-200 transition-all flex items-center justify-center gap-2"><RotateCcw size={18} /></button>
                                 )}
                             </div>
                         </div>
@@ -223,7 +273,6 @@ export default function EmployeesPage() {
                 </section>
 
                 <section className="lg:col-span-8">
-                    {/* ... ส่วนแสดงรายการพนักงาน (เหมือนเดิมแต่เปลี่ยน Filter เล็กน้อยเพื่อ Type Safety) ... */}
                     <div className="bg-white rounded-[2.5rem] border-4 border-white shadow-xl overflow-hidden min-h-[500px]">
                         <div className="p-6 border-b border-slate-50 bg-slate-50/30 flex justify-between items-center gap-4">
                             <h3 className="text-lg font-black text-slate-900">พนักงานปัจจุบัน ({filteredEmployees.length})</h3>
@@ -243,10 +292,11 @@ export default function EmployeesPage() {
                                         <div className="flex items-center gap-2 mt-1">
                                             <span className="text-[9px] font-black px-2 py-0.5 rounded bg-slate-100 text-slate-400">#{emp.staff_id}</span>
                                             <span className="text-[9px] font-black px-2 py-0.5 rounded text-white" style={{ backgroundColor: emp.departments?.color_code || '#000' }}>{emp.departments?.name || 'ทั่วไป'}</span>
+                                            {emp.user_id && <span className="text-[9px] font-black px-2 py-0.5 rounded bg-emerald-100 text-emerald-600">มีบัญชีผู้ใช้</span>}
                                         </div>
                                     </div>
                                     <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button onClick={() => { setIsEditing(true); setEditId(emp.id); setFormData({ name: emp.name, staff_id: emp.staff_id, department_id: emp.department_id || "" }); setPreviewUrl(emp.image_url); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className="p-2 text-slate-300 hover:text-orange-500"><Edit3 size={16} /></button>
+                                        <button onClick={() => { setIsEditing(true); setEditId(emp.id); setFormData({ name: emp.name, staff_id: emp.staff_id, department_id: emp.department_id || "", email: "", password: "" }); setPreviewUrl(emp.image_url); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className="p-2 text-slate-300 hover:text-orange-500"><Edit3 size={16} /></button>
                                         <button onClick={() => handleDisable(emp)} className="p-2 text-slate-300 hover:text-rose-500"><UserX size={16} /></button>
                                     </div>
                                 </div>

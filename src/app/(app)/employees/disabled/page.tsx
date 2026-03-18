@@ -3,13 +3,14 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { UserCheck, ArrowLeft, Loader2, Search, UserX, Trash2, AlertCircle } from "lucide-react";
+import { ArrowLeft, Loader2, Search, UserX, Trash2, AlertCircle, UserCheck } from "lucide-react";
 
 interface Department { 
     id: string; 
     name: string; 
     color_code: string; 
 }
+
 interface Employee {
     id: string;
     staff_id: string;
@@ -18,6 +19,7 @@ interface Employee {
     department_id: string | null;
     departments: Department | null;
     is_active: boolean;
+    user_id?: string | null;
 }
 
 export default function DisabledEmployeesPage() {
@@ -39,7 +41,8 @@ export default function DisabledEmployeesPage() {
             if (error) throw error;
             if (data) setEmployees(data as unknown as Employee[]);
         } catch (err) {
-            console.error("Error fetching disabled employees:", err);
+            const message = err instanceof Error ? err.message : String(err);
+            console.error("Error fetching disabled employees:", message);
         } finally {
             setLoading(false);
         }
@@ -47,17 +50,68 @@ export default function DisabledEmployeesPage() {
 
     useEffect(() => { fetchDisabled(); }, [fetchDisabled]);
 
+    // ฟังก์ชันดึงกลับเข้าทำงาน + สร้างบัญชีใหม่ทันที
     const handleRestore = async (emp: Employee) => {
-        if(confirm(`ดึงคุณ ${emp.name} กลับเข้าทำงาน?`)) {
-            const { error } = await supabase.from("employees").update({ is_active: true }).eq("id", emp.id);
-            if (!error) setEmployees(prev => prev.filter(e => e.id !== emp.id));
+        const email = prompt(`ดึงคุณ ${emp.name} กลับเข้าทำงาน\nกรุณาระบุ Email สำหรับใช้ Login:`);
+        if (!email) return;
+
+        const password = prompt(`ตั้งรหัสผ่านใหม่สำหรับคุณ ${emp.name}\n(อย่างน้อย 6 ตัวอักษร):`);
+        if (!password) return;
+        if (password.length < 6) {
+            alert("รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร");
+            return;
+        }
+
+        setLoading(true);
+        try {
+            // 1. เรียก API เพื่อสร้าง Auth User ใหม่ (เพราะของเดิมถูกลบไปแล้ว)
+            const res = await fetch('/employees/api', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    email: email,
+                    password: password,
+                    name: emp.name
+                })
+            });
+
+            const authRes = await res.json();
+            if (authRes.error) throw new Error(authRes.error);
+
+            const newUserId = authRes.user.id;
+
+            // 2. อัปเดตข้อมูลใน profiles (ถ้ามีตารางแยก)
+            await supabase.from("profiles").update({ email: email }).eq("id", newUserId);
+
+            // 3. อัปเดตตาราง employees ให้กลับมาใช้งานได้และผูก user_id ใหม่
+            const { error: updateError } = await supabase
+                .from("employees")
+                .update({ 
+                    is_active: true, 
+                    user_id: newUserId 
+                })
+                .eq("id", emp.id);
+
+            if (updateError) throw updateError;
+
+            alert(`ดึงคุณ ${emp.name} กลับเข้าทำงานและสร้างบัญชีใหม่เรียบร้อยแล้ว`);
+            setEmployees(prev => prev.filter(e => e.id !== emp.id));
+        } catch (err) {
+            const errorMessage = err instanceof Error ? err.message : "เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุ";
+            alert("เกิดข้อผิดพลาด: " + errorMessage);
+        } finally {
+            setLoading(false);
         }
     };
 
     const handleDeleteForever = async (emp: Employee) => {
-        if(confirm(`ยืนยันการลบคุณ ${emp.name} ถาวร?\n(หากลบพนักงานคนสุดท้ายที่มีเลข ID สูงสุด เลขถัดไปที่ระบบสร้างจะถอยหลัง)`)) {
+        if(confirm(`ยืนยันการลบคุณ ${emp.name} ออกจากระบบถาวร?\n(ข้อมูลประวัติพนักงานจะหายไปทั้งหมดและไม่สามารถกู้คืนได้)`)) {
             const { error } = await supabase.from("employees").delete().eq("id", emp.id);
-            if (!error) setEmployees(prev => prev.filter(e => e.id !== emp.id));
+            if (!error) {
+                setEmployees(prev => prev.filter(e => e.id !== emp.id));
+            } else {
+                alert("ไม่สามารถลบข้อมูลได้");
+            }
         }
     };
 
@@ -72,7 +126,9 @@ export default function DisabledEmployeesPage() {
         <main className="max-w-5xl mx-auto p-4 md:p-8 min-h-screen bg-slate-50/30">
             <header className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="flex items-center gap-4">
-                    <div className="p-3 bg-slate-900 rounded-2xl text-white shadow-xl"><UserX size={24} /></div>
+                    <div className="p-3 bg-slate-900 rounded-2xl text-white shadow-xl">
+                        <UserX size={24} />
+                    </div>
                     <div>
                         <h1 className="text-2xl font-black text-slate-900 tracking-tight">Inactive Staff</h1>
                         <p className="text-slate-400 font-bold text-sm">รายชื่อพนักงานที่พ้นสภาพ</p>
@@ -87,43 +143,74 @@ export default function DisabledEmployeesPage() {
             </header>
 
             <div className="bg-white rounded-[2.5rem] border-4 border-white shadow-xl overflow-hidden min-h-[500px]">
-                <div className="p-6 border-b border-slate-50 bg-slate-50/30 flex justify-between items-center gap-4">
+                <div className="p-6 border-b border-slate-50 bg-slate-50/30 flex flex-col md:flex-row justify-between items-center gap-4">
                     <div className="relative w-full md:w-96">
                         <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                        <input type="text" placeholder="ค้นหา..." className="w-full pl-11 pr-4 py-3 bg-white border-2 border-slate-100 rounded-2xl font-bold outline-none" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+                        <input 
+                            type="text" 
+                            placeholder="ค้นหาพนักงานที่พ้นสภาพ..." 
+                            className="w-full pl-11 pr-4 py-3 bg-white border-2 border-slate-100 rounded-2xl font-bold outline-none focus:border-slate-900 transition-all" 
+                            value={searchQuery} 
+                            onChange={(e) => setSearchQuery(e.target.value)} 
+                        />
                     </div>
                     <div className="text-slate-400 text-sm font-bold">ทั้งหมด {filtered.length} รายการ</div>
                 </div>
 
                 <div className="p-6 space-y-4">
                     {loading ? (
-                        <div className="py-20 flex justify-center"><Loader2 className="animate-spin text-slate-200" size={40} /></div>
+                        <div className="py-20 flex justify-center">
+                            <Loader2 className="animate-spin text-slate-200" size={40} />
+                        </div>
                     ) : filtered.length === 0 ? (
                         <div className="py-20 text-center text-slate-300 font-bold flex flex-col items-center gap-2">
                             <AlertCircle size={48} className="opacity-20" />
-                            ไม่มีข้อมูลพนักงานที่ปิดใช้งาน
+                            ไม่มีข้อมูลพนักงานที่พ้นสภาพ
                         </div>
                     ) : (
                         filtered.map((emp) => (
                             <div key={emp.id} className="p-4 rounded-[2rem] border-2 border-slate-50 bg-white flex items-center gap-4 group transition-all hover:border-slate-100 shadow-sm hover:shadow-md">
-                                <div className="w-14 h-14 rounded-2xl overflow-hidden grayscale opacity-50 bg-slate-100">
-                                    <img src={emp.image_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(emp.name)}`} className="w-full h-full object-cover" alt="" />
+                                <div className="w-14 h-14 rounded-2xl overflow-hidden grayscale opacity-50 bg-slate-100 flex-shrink-0">
+                                    <img 
+                                        src={emp.image_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(emp.name)}&background=random`} 
+                                        className="w-full h-full object-cover" 
+                                        alt={emp.name} 
+                                    />
                                 </div>
-                                <div className="flex-grow">
-                                    <div className="font-black text-slate-500 group-hover:text-slate-900 transition-all">{emp.name}</div>
-                                    <div className="text-[10px] font-bold text-slate-400">ID: {emp.staff_id} | {emp.departments?.name || 'ทั่วไป'}</div>
+                                <div className="flex-grow min-w-0">
+                                    <div className="font-black text-slate-500 group-hover:text-slate-900 transition-all truncate">
+                                        {emp.name}
+                                    </div>
+                                    <div className="text-[10px] font-bold text-slate-400 truncate">
+                                        ID: {emp.staff_id} | {emp.departments?.name || 'ทั่วไป'}
+                                    </div>
                                 </div>
                                 <div className="flex gap-2">
-                                    <button onClick={() => handleRestore(emp)} className="px-5 py-2.5 bg-slate-900 text-white rounded-xl font-black text-xs flex items-center gap-2 hover:bg-black shadow-md transition-all active:scale-95">
-                                        <UserCheck size={14} /> ดึงกลับเข้าทำงาน
+                                    <button 
+                                        onClick={() => handleRestore(emp)} 
+                                        className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white hover:bg-black rounded-xl font-bold text-xs transition-all active:scale-95 shadow-md"
+                                    >
+                                        <UserCheck size={16} /> ดึงกลับเข้าทำงาน
                                     </button>
-                                    <button onClick={() => handleDeleteForever(emp)} className="p-2 text-slate-300 hover:text-rose-500 transition-colors"><Trash2 size={18} /></button>
+                                    <button 
+                                        onClick={() => handleDeleteForever(emp)} 
+                                        className="p-2 text-slate-300 hover:text-rose-500 transition-colors"
+                                        title="ลบประวัติถาวร"
+                                    >
+                                        <Trash2 size={18} />
+                                    </button>
                                 </div>
                             </div>
                         ))
                     )}
                 </div>
             </div>
+            
+            <footer className="mt-8 text-center">
+                <p className="text-slate-400 text-xs font-medium italic">
+                    * พนักงานที่พ้นสภาพจะถูกลบบัญชีผู้ใช้เดิมออกเพื่อความปลอดภัย การดึงกลับเข้าทำงานต้องกำหนดรหัสผ่านใหม่เสมอ
+                </p>
+            </footer>
         </main>
     );
 }

@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
-// --- ส่วนของ Interface ที่ปรับปรุงเพื่อแก้ตัวแดง ---
+// --- Interfaces ---
 interface Department { 
     id: string; 
     name: string; 
@@ -23,17 +23,17 @@ interface Employee {
     department_id: string | null;
     departments: Department | null;
     is_active: boolean;
-    user_id?: string | null; // เพิ่มรองรับ user_id
+    user_id?: string | null;
 }
 
-// กำหนดโครงสร้างข้อมูลสำหรับ Insert/Update
+// โครงสร้างสำหรับข้อมูลที่จะส่งไป Insert/Update ใน Database
 interface EmployeePayload {
     name: string;
     department_id: string;
     image_url: string | null;
     is_active: boolean;
     user_id?: string | null;
-    staff_id?: string; // ใส่ ? เพราะตอน update ไม่ต้องส่ง staff_id
+    staff_id?: string;
 }
 
 export default function EmployeesPage() {
@@ -47,7 +47,6 @@ export default function EmployeesPage() {
     const [loading, setLoading] = useState<boolean>(true);
     const [uploading, setUploading] = useState<boolean>(false);
 
-    // เพิ่ม email, password ในฟอร์ม
     const [formData, setFormData] = useState({ 
         name: "", 
         staff_id: "", 
@@ -123,9 +122,7 @@ export default function EmployeesPage() {
     const filteredEmployees = useMemo(() => {
         return employees.filter(emp => {
             const s = searchQuery.toLowerCase();
-            const nameMatch = emp.name?.toLowerCase().includes(s) ?? false;
-            const idMatch = emp.staff_id?.toString().includes(searchQuery) ?? false;
-            return nameMatch || idMatch;
+            return (emp.name?.toLowerCase().includes(s) ?? false) || (emp.staff_id?.toString().includes(searchQuery) ?? false);
         });
     }, [employees, searchQuery]);
 
@@ -154,21 +151,27 @@ export default function EmployeesPage() {
 
             let userIdForEmployee: string | null = null;
 
-            // สร้าง Auth User (เฉพาะกรณีเพิ่มใหม่)
+            // --- ส่วนที่แก้ไข: เรียก API Route แทนการใช้ signUp โดยตรง ---
             if (!isEditing && formData.email && formData.password) {
-                const { data: authData, error: authError } = await supabase.auth.signUp({
-                    email: formData.email,
-                    password: formData.password,
+                const res = await fetch('/employees/api', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: formData.email,
+                        password: formData.password,
+                        name: formData.name
+                    })
                 });
-                if (authError) throw authError;
-                if (authData.user) {
-                    userIdForEmployee = authData.user.id;
-                    // อัปเดต email ในตาราง profiles ที่ถูกสร้างอัตโนมัติจาก Trigger (ถ้ามี)
-                    await supabase.from("profiles").update({ email: formData.email }).eq("id", userIdForEmployee);
-                }
+
+                const authRes = await res.json();
+                if (authRes.error) throw new Error(authRes.error);
+                
+                userIdForEmployee = authRes.user.id;
+                
+                // อัปเดตข้อมูลเบื้องต้นในตาราง profiles (ที่ปกติจะถูกสร้างโดย Trigger)
+                await supabase.from("profiles").update({ email: formData.email }).eq("id", userIdForEmployee);
             }
 
-            // ใช้ Interface EmployeePayload แทน any เพื่อแก้ตัวแดง
             const payload: EmployeePayload = {
                 name: formData.name.trim(),
                 department_id: formData.department_id,
@@ -208,7 +211,7 @@ export default function EmployeesPage() {
                     <div className="p-3 bg-slate-900 rounded-2xl text-white shadow-xl"><Users size={24} /></div>
                     <div>
                         <h1 className="text-2xl font-black text-slate-900 tracking-tight">Staff Management</h1>
-                        <p className="text-slate-400 font-bold text-sm">จัดการพนักงานและบัญชีผู้ใช้</p>
+                        <p className="text-slate-400 font-bold text-sm">จัดการพนักงานและบัญชีเข้าใช้งาน</p>
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -236,21 +239,20 @@ export default function EmployeesPage() {
                         </div>
                         <div className="space-y-4">
                             <div className="space-y-2">
-                                <label className="text-[10px] font-black uppercase text-slate-400 ml-2">ข้อมูลพนักงาน</label>
+                                <label className="text-[10px] font-black uppercase text-slate-400 ml-2">ข้อมูลส่วนตัว</label>
                                 <input type="text" placeholder="ชื่อ-นามสกุล..." className="w-full p-4 bg-slate-50 border-2 border-transparent focus:border-slate-900 rounded-2xl font-bold outline-none" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} required />
                                 <select className="w-full p-4 bg-slate-50 border-2 border-transparent focus:border-slate-900 rounded-2xl font-bold outline-none" value={formData.department_id} onChange={(e) => setFormData({ ...formData, department_id: e.target.value })} required>
                                     <option value="">เลือกแผนก...</option>
                                     {departments.map(dept => <option key={dept.id} value={dept.id}>{dept.name}</option>)}
                                 </select>
                             </div>
-                            
-                            {/* แสดงส่วน Email/Password เฉพาะตอนเพิ่มพนักงานใหม่ */}
+
                             {!isEditing && (
                                 <div className="space-y-2 pt-2 border-t-2 border-slate-50">
-                                    <label className="text-[10px] font-black uppercase text-slate-400 ml-2">บัญชีเข้าใช้งาน (Role: User)</label>
+                                    <label className="text-[10px] font-black uppercase text-slate-400 ml-2">บัญชี Login (User Role)</label>
                                     <div className="relative">
                                         <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
-                                        <input type="email" placeholder="Email พนักงาน" className="w-full pl-12 p-4 bg-slate-50 border-2 border-transparent focus:border-slate-900 rounded-2xl font-bold outline-none" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} required={!isEditing} />
+                                        <input type="email" placeholder="Email" className="w-full pl-12 p-4 bg-slate-50 border-2 border-transparent focus:border-slate-900 rounded-2xl font-bold outline-none" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} required={!isEditing} />
                                     </div>
                                     <div className="relative">
                                         <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
@@ -262,7 +264,7 @@ export default function EmployeesPage() {
                             <div className="flex gap-2 pt-4">
                                 <button type="submit" disabled={uploading} className={`flex-grow py-4 text-white rounded-[1.5rem] font-black shadow-xl flex items-center justify-center gap-2 transition-all ${isEditing ? 'bg-orange-500 hover:bg-orange-600' : 'bg-slate-900 hover:bg-slate-800'}`}>
                                     {uploading ? <Loader2 className="animate-spin" size={20} /> : (isEditing ? <Save size={20} /> : <Plus size={20} />)}
-                                    {isEditing ? "อัปเดตข้อมูล" : "สร้างพนักงานและบัญชี"}
+                                    {isEditing ? "อัปเดตข้อมูล" : "เพิ่มพนักงานและบัญชี"}
                                 </button>
                                 {isEditing && (
                                     <button type="button" onClick={resetForm} className="px-5 py-4 bg-slate-100 text-slate-500 rounded-[1.5rem] font-black hover:bg-slate-200 transition-all flex items-center justify-center gap-2"><RotateCcw size={18} /></button>

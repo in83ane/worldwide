@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import dynamic from 'next/dynamic';
-import { Navigation, Loader2, ExternalLink, X, Clock, MapPin, Building2, Search, ChevronDown } from 'lucide-react';
+import { Navigation, Loader2, ExternalLink, X, Clock, MapPin, Building2, Search, ChevronDown, LocateFixed } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import type { MapTask } from './MapComponent';
 
@@ -36,7 +36,8 @@ interface Department {
 
 interface MapComponentProps {
   tasks: MapTask[];
-  center: [number, number];
+  startPoint: [number, number] | null;
+  gpsPos: [number, number] | null;
   onOrderChange: (newOrder: MapTask[]) => void;
 }
 
@@ -54,16 +55,38 @@ const MapComponent = dynamic<MapComponentProps>(
   }
 );
 
-const DEFAULT_CENTER: [number, number] = [13.7563, 100.5018]; // Bangkok
-
 const getAvatarUrl = (name: string) =>
   `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'Staff')}&background=random&color=fff&size=200`;
+
+interface LongdoResult {
+  lat: number;
+  lon: number;
+  name: string;
+  address: string;
+}
+
+const LONGDO_KEY = '7ab7d7d3dbf947cebbdae10203740d2a';
+
+const searchPlaces = async (query: string): Promise<LongdoResult[]> => {
+  if (!query.trim() || query.length < 2) return [];
+  try {
+    const res = await fetch(
+      `https://search.longdo.com/mapsearch/json/search?keyword=${encodeURIComponent(query)}&limit=6&key=${LONGDO_KEY}`
+    );
+    const data = await res.json();
+    return (data.data ?? []).map((item: { lat: number; lon: number; name: string; address?: string }) => ({
+      lat: item.lat,
+      lon: item.lon,
+      name: item.name,
+      address: item.address ?? '',
+    }));
+  } catch { return []; }
+};
 
 export default function MapPage() {
   const supabase = useMemo(() => createClient(), []);
 
   const [isAdmin, setIsAdmin] = useState(false);
-  const [currentEmployeeId, setCurrentEmployeeId] = useState<string | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
   const [empDropdownOpen, setEmpDropdownOpen] = useState(false);
@@ -74,6 +97,16 @@ export default function MapPage() {
   const [mapTasks, setMapTasks] = useState<MapTask[]>([]);
   const [orderedTasks, setOrderedTasks] = useState<MapTask[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // จุดเริ่มต้น + autocomplete
+  const [startInput, setStartInput] = useState('');
+  const [startPoint, setStartPoint] = useState<[number, number] | null>(null);
+  const [suggestions, setSuggestions] = useState<LongdoResult[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [gpsPos, setGpsPos] = useState<[number, number] | null>(null);
+  const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const startInputRef = useRef<HTMLDivElement>(null);
 
   const [showModal, setShowModal] = useState(false);
   const [selectedWork, setSelectedWork] = useState<WorkScheduleRow | null>(null);
@@ -96,7 +129,6 @@ export default function MapPage() {
       const empId = employee?.id ?? null;
 
       setIsAdmin(admin);
-      setCurrentEmployeeId(empId);
       setEmployees((empsData ?? []) as unknown as Employee[]);
 
       const colorMap = ((deptsData ?? []) as Department[]).reduce((acc, d) => {
@@ -105,7 +137,6 @@ export default function MapPage() {
       }, {} as Record<string, string>);
       setDeptColorMap(colorMap);
 
-      // non-admin ดูแค่ตัวเอง
       if (!admin && empId) setSelectedEmployeeId(empId);
 
       setLoading(false);
@@ -173,15 +204,53 @@ export default function MapPage() {
     setShowModal(false);
   };
 
+  const handleStartInputChange = (value: string) => {
+    setStartInput(value);
+    setStartPoint(null);
+    if (searchDebounce.current) clearTimeout(searchDebounce.current);
+    if (!value.trim() || value.length < 2) { setSuggestions([]); setShowSuggestions(false); return; }
+    setSearching(true);
+    searchDebounce.current = setTimeout(async () => {
+      const results = await searchPlaces(value);
+      setSuggestions(results);
+      setShowSuggestions(results.length > 0);
+      setSearching(false);
+    }, 400); // debounce 400ms
+  };
+
+  const handleSelectSuggestion = (result: LongdoResult) => {
+    setStartPoint([result.lat, result.lon]);
+    setStartInput(result.name);
+    setSuggestions([]);
+    setShowSuggestions(false);
+  };
+
+  const handleUseGPS = () => {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        // GPS แค่ pan แผนที่ไปหาตำแหน่งปัจจุบัน — ไม่ set startPoint
+        setGpsPos([pos.coords.latitude, pos.coords.longitude]);
+      },
+      err => console.warn(err)
+    );
+  };
+
+  // ปิด dropdown เมื่อคลิกนอก
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (startInputRef.current && !startInputRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
   const selectedEmployee = employees.find(e => e.id === selectedEmployeeId);
   const filteredEmployees = employees.filter(e =>
     e.name.toLowerCase().includes(empSearch.toLowerCase())
   );
-
-  // ส่ง [0,0] เพื่อให้ MapComponent รอ GPS เอง ไม่ใช้ default ที่อาจผิด
-  const mapCenter: [number, number] = mapTasks.length > 0
-    ? [mapTasks[0].lat, mapTasks[0].lng]
-    : [0, 0];
 
   if (loading) return (
     <div className="h-screen flex items-center justify-center">
@@ -194,19 +263,20 @@ export default function MapPage() {
       <div className="max-w-7xl mx-auto space-y-6">
 
         {/* Header */}
-        <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-slate-900 rounded-2xl text-white shadow-xl">
-              <Navigation size={24} />
+        <header className="flex flex-col gap-4 bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-slate-900 rounded-2xl text-white shadow-xl">
+                <Navigation size={24} />
+              </div>
+              <div>
+                <h1 className="text-xl font-black text-slate-900">ระบบจัดเส้นทางงาน</h1>
+                <p className="text-[11px] text-slate-400 font-bold uppercase tracking-widest">Route Optimization</p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-xl font-black text-slate-900">ระบบจัดเส้นทางงาน</h1>
-              <p className="text-[11px] text-slate-400 font-bold uppercase tracking-widest">Route Optimization</p>
-            </div>
-          </div>
 
-          {/* Admin: เลือกพนักงาน */}
-          {isAdmin && (
+            {/* Admin: เลือกพนักงาน */}
+            {isAdmin && (
             <div className="relative w-72" >
               <button
                 onClick={() => setEmpDropdownOpen(!empDropdownOpen)}
@@ -255,6 +325,46 @@ export default function MapPage() {
               )}
             </div>
           )}
+          </div>{/* end flex row */}
+
+          {/* Input จุดเริ่มต้น + Autocomplete */}
+          <div className="border-t border-slate-100 pt-4">
+            <p className="text-xs font-black text-slate-400 uppercase tracking-wider mb-2">จุดเริ่มต้นเส้นทาง</p>
+            <div className="flex gap-2">
+              <div className="relative flex-grow" ref={startInputRef}>
+                <MapPin size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 z-10" />
+                {searching && <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 animate-spin z-10" />}
+                <input
+                  value={startInput}
+                  onChange={e => handleStartInputChange(e.target.value)}
+                  onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+                  placeholder="พิมพ์ชื่อสถานที่ ไทย หรือ English..."
+                  className={`w-full pl-9 pr-4 py-3 bg-slate-50 border-2 rounded-2xl font-bold text-sm outline-none transition-all ${startPoint ? 'border-emerald-300 bg-emerald-50' : 'border-transparent focus:border-slate-300'}`}
+                />
+                {/* Dropdown suggestions */}
+                {showSuggestions && suggestions.length > 0 && (
+                  <div className="absolute z-50 w-full bg-white shadow-2xl rounded-2xl mt-1 border border-slate-100 overflow-hidden">
+                    {suggestions.map((s, idx) => (
+                      <button key={idx} type="button"
+                        onMouseDown={() => handleSelectSuggestion(s)}
+                        className="w-full flex items-start gap-3 px-4 py-3 hover:bg-slate-50 transition-colors text-left border-b border-slate-50 last:border-0">
+                        <MapPin size={14} className="text-slate-400 mt-0.5 shrink-0" />
+                        <div className="min-w-0">
+                          <p className="font-bold text-sm text-slate-800 truncate">{s.name}</p>
+                          <p className="text-xs text-slate-400 font-medium truncate">{s.address}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <button type="button" onClick={handleUseGPS}
+                className="px-4 py-3 bg-blue-50 text-blue-600 border-2 border-blue-100 rounded-2xl font-black text-sm flex items-center gap-2 shrink-0 hover:bg-blue-100 transition-all">
+                <LocateFixed size={16} /> GPS
+              </button>
+            </div>
+            {startPoint && <p className="text-xs text-emerald-600 font-bold mt-1 ml-2">✓ พบตำแหน่งแล้ว — พร้อมคำนวณเส้นทาง</p>}
+          </div>
         </header>
 
         {!selectedEmployeeId ? (
@@ -267,7 +377,7 @@ export default function MapPage() {
             {/* Map */}
             <div className="bg-white p-2 rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden" style={{ height: 500 }}>
               {mapTasks.length > 0 ? (
-                <MapComponent tasks={mapTasks} center={mapCenter} onOrderChange={handleOrderChange} />
+                <MapComponent tasks={mapTasks} startPoint={startPoint} gpsPos={gpsPos} onOrderChange={handleOrderChange} />
               ) : (
                 <div className="h-full flex flex-col items-center justify-center text-slate-300">
                   <MapPin size={48} className="mb-3" />
@@ -277,12 +387,19 @@ export default function MapPage() {
               )}
             </div>
 
-            {/* Ordered route list */}
-            {orderedTasks.length > 0 && (
-              <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-slate-100">
-                <h2 className="font-black text-slate-800 mb-4 flex items-center gap-2">
-                  <Navigation size={18} className="text-blue-600" /> ลำดับเส้นทางที่เหมาะสม
-                </h2>
+            {/* Ordered route list — แสดงตลอดเวลา */}
+            <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-slate-100">
+              <h2 className="font-black text-slate-800 mb-4 flex items-center gap-2">
+                <Navigation size={18} className="text-blue-600" /> ลำดับเส้นทางที่เหมาะสม
+              </h2>
+              {!startPoint ? (
+                <p className="text-sm text-slate-400 font-bold text-center py-6">กรอกจุดเริ่มต้นเพื่อคำนวณเส้นทาง</p>
+              ) : orderedTasks.length === 0 ? (
+                <div className="flex items-center justify-center gap-2 py-6 text-slate-400">
+                  <Loader2 size={16} className="animate-spin" />
+                  <p className="text-sm font-bold">กำลังคำนวณเส้นทาง...</p>
+                </div>
+              ) : (
                 <div className="space-y-3 relative">
                   <div className="absolute left-[15px] top-4 bottom-4 w-[2px] bg-slate-100" />
                   {orderedTasks.map((task, idx) => (
@@ -295,7 +412,7 @@ export default function MapPage() {
                           <p className="font-black text-slate-800 text-sm">{task.location}</p>
                           <p className="text-xs text-slate-400 font-bold mt-0.5">{task.name}</p>
                         </div>
-                        <button onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${task.lat},${task.lng}`)}
+                        <button type="button" onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${task.lat},${task.lng}`)}
                           className="flex items-center gap-1.5 text-[10px] text-blue-600 font-black bg-blue-50 px-3 py-1.5 rounded-xl shrink-0 ml-3">
                           <ExternalLink size={11} /> Google Maps
                         </button>
@@ -303,8 +420,8 @@ export default function MapPage() {
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
+              )}
+            </div>
 
             {/* Job list ใต้แผนที่ */}
             <div className="space-y-3">

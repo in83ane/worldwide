@@ -59,6 +59,31 @@ function formatDisplayDate(dateStr: string | null): string {
     return `${d}/${m}/${parseInt(y) + 543}`;
 }
 
+interface LongdoResult {
+    lat: number;
+    lon: number;
+    name: string;
+    address: string;
+}
+
+const LONGDO_KEY = '7ab7d7d3dbf947cebbdae10203740d2a';
+
+const searchPlaces = async (query: string): Promise<LongdoResult[]> => {
+    if (!query.trim() || query.length < 2) return [];
+    try {
+        const res = await fetch(
+            `https://search.longdo.com/mapsearch/json/search?keyword=${encodeURIComponent(query)}&limit=6&key=${LONGDO_KEY}`
+        );
+        const data = await res.json();
+        return (data.data ?? []).map((item: { lat: number; lon: number; name: string; address?: string }) => ({
+            lat: item.lat,
+            lon: item.lon,
+            name: item.name,
+            address: item.address ?? '',
+        }));
+    } catch { return []; }
+};
+
 export default function HomePage() {
     const router = useRouter();
     const supabase = useMemo(() => createClient(), []);
@@ -76,6 +101,11 @@ export default function HomePage() {
     const [selectedWork, setSelectedWork] = useState<WorkScheduleItem | null>(null);
     const [showWorkModal, setShowWorkModal] = useState(false);
     const [isDeptOpen, setIsDeptOpen] = useState(false);
+    const [locationSuggestions, setLocationSuggestions] = useState<LongdoResult[]>([]);
+    const [showLocationSuggestions, setShowLocationSuggestions] = useState(false);
+    const [locationSearching, setLocationSearching] = useState(false);
+    const locationDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const locationInputRef = useRef<HTMLDivElement>(null);
 
     const initialFormState: WorkForm = {
         work_date: new Date().toISOString().split('T')[0],
@@ -164,29 +194,49 @@ export default function HomePage() {
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, [supabase, router, refreshData]);
 
-    const geocodeDepartment = async (placeName: string): Promise<{ lat: number; lng: number } | null> => {
-        // viewbox ครอบคลุมประเทศไทยทั้งหมด (west, south, east, north)
-        const THAILAND_VIEWBOX = '97.5,5.5,105.7,20.5';
-        const queries = [
-            `${placeName}`,
-            `${placeName} กรุงเทพ`,
-            `${placeName} Thailand`,
-        ];
-        for (const q of queries) {
-            try {
-                const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1&countrycodes=th&bounded=1&viewbox=${THAILAND_VIEWBOX}`;
-                const res = await fetch(url, { headers: { 'Accept-Language': 'th,en' } });
-                const data = await res.json();
-                if (data && data.length > 0) {
-                    const lat = parseFloat(data[0].lat);
-                    const lng = parseFloat(data[0].lon);
-                    // ตรวจสอบพิกัดอยู่ในไทยจริงๆ
-                    if (lat >= 5.5 && lat <= 20.5 && lng >= 97.5 && lng <= 105.7) {
-                        return { lat, lng };
-                    }
-                }
-            } catch { /* ลอง query ถัดไป */ }
+    // location autocomplete
+    const handleLocationInput = (value: string) => {
+        setFormData(prev => ({ ...prev, department: value }));
+        if (locationDebounce.current) clearTimeout(locationDebounce.current);
+        if (!value.trim() || value.length < 2) {
+            setLocationSuggestions([]);
+            setShowLocationSuggestions(false);
+            return;
         }
+        setLocationSearching(true);
+        locationDebounce.current = setTimeout(async () => {
+            const results = await searchPlaces(value);
+            setLocationSuggestions(results);
+            setShowLocationSuggestions(results.length > 0);
+            setLocationSearching(false);
+        }, 400);
+    };
+
+    const handleSelectLocation = (result: LongdoResult) => {
+        setFormData(prev => ({ ...prev, department: result.name }));
+        setLocationSuggestions([]);
+        setShowLocationSuggestions(false);
+    };
+
+    useEffect(() => {
+        const handler = (e: MouseEvent) => {
+            if (locationInputRef.current && !locationInputRef.current.contains(e.target as Node)) {
+                setShowLocationSuggestions(false);
+            }
+        };
+        document.addEventListener("mousedown", handler);
+        return () => document.removeEventListener("mousedown", handler);
+    }, []);
+
+    const geocodeDepartment = async (placeName: string): Promise<{ lat: number; lng: number } | null> => {
+        try {
+            const res = await fetch(
+                `https://search.longdo.com/mapsearch/json/search?keyword=${encodeURIComponent(placeName)}&limit=1&key=${LONGDO_KEY}`
+            );
+            const data = await res.json();
+            const item = data.data?.[0];
+            if (item?.lat && item?.lon) return { lat: item.lat, lng: item.lon };
+        } catch { /* บันทึกได้โดยไม่มี lat/lng */ }
         return null;
     };
 
@@ -322,9 +372,32 @@ export default function HomePage() {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="flex flex-col gap-2">
                                 <label className="text-xs font-black uppercase opacity-50 ml-2 tracking-wider">สถานที่ / หน่วยงาน</label>
-                                <div className="relative">
-                                    <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                                    <input required className="h-[60px] pl-12 pr-4 bg-slate-50 border-2 rounded-2xl font-bold w-full focus:bg-white focus:border-slate-900 transition-all" placeholder="ระบุชื่อสถานที่..." value={formData.department} onChange={e => setFormData({ ...formData, department: e.target.value })} />
+                                <div className="relative" ref={locationInputRef}>
+                                    <MapPin className="absolute left-4 top-[18px] text-slate-400 z-10" size={18} />
+                                    {locationSearching && <Loader2 size={14} className="absolute right-4 top-[20px] text-slate-400 animate-spin z-10" />}
+                                    <input
+                                        required
+                                        className="h-[60px] pl-12 pr-4 bg-slate-50 border-2 rounded-2xl font-bold w-full focus:bg-white focus:border-slate-900 transition-all outline-none"
+                                        placeholder="พิมพ์ชื่อสถานที่..."
+                                        value={formData.department}
+                                        onChange={e => handleLocationInput(e.target.value)}
+                                        onFocus={() => locationSuggestions.length > 0 && setShowLocationSuggestions(true)}
+                                    />
+                                    {showLocationSuggestions && locationSuggestions.length > 0 && (
+                                        <div className="absolute z-[120] w-full bg-white shadow-2xl rounded-2xl mt-1 border-2 border-slate-100 overflow-hidden">
+                                            {locationSuggestions.map((s, idx) => (
+                                                <button key={idx} type="button"
+                                                    onMouseDown={() => handleSelectLocation(s)}
+                                                    className="w-full flex items-start gap-3 px-4 py-3 hover:bg-slate-50 transition-colors text-left border-b border-slate-50 last:border-0">
+                                                    <MapPin size={14} className="text-slate-400 mt-0.5 shrink-0" />
+                                                    <div className="min-w-0">
+                                                        <p className="font-bold text-sm text-slate-800 truncate">{s.name}</p>
+                                                        <p className="text-xs text-slate-400 truncate">{s.address}</p>
+                                                    </div>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 

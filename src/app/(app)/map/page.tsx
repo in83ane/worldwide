@@ -38,7 +38,8 @@ interface MapComponentProps {
   tasks: MapTask[];
   startPoint: [number, number] | null;
   gpsPos: [number, number] | null;
-  onOrderChange: (newOrder: MapTask[]) => void;
+  gpsTrigger: number;
+  onOrderChange: (newOrder: MapTask[], isReady: boolean) => void;
 }
 
 // ===== Dynamic Map Import =====
@@ -96,6 +97,8 @@ export default function MapPage() {
   const [deptColorMap, setDeptColorMap] = useState<Record<string, string>>({});
   const [mapTasks, setMapTasks] = useState<MapTask[]>([]);
   const [orderedTasks, setOrderedTasks] = useState<MapTask[]>([]);
+  // ใช้ isRouteReady แทนการ check orderedTasks.length เพื่อแยก "ยังไม่มีข้อมูล" กับ "กำลังคำนวณ"
+  const [isRouteReady, setIsRouteReady] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // จุดเริ่มต้น + autocomplete
@@ -105,6 +108,7 @@ export default function MapPage() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [searching, setSearching] = useState(false);
   const [gpsPos, setGpsPos] = useState<[number, number] | null>(null);
+  const [gpsTrigger, setGpsTrigger] = useState(0);
   const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startInputRef = useRef<HTMLDivElement>(null);
 
@@ -148,7 +152,13 @@ export default function MapPage() {
   useEffect(() => {
     const fetchWorks = async () => {
       const targetId = selectedEmployeeId;
-      if (!targetId) { setWorks([]); setMapTasks([]); setOrderedTasks([]); return; }
+      if (!targetId) {
+        setWorks([]);
+        setMapTasks([]);
+        setOrderedTasks([]);
+        setIsRouteReady(false);
+        return;
+      }
 
       const { data } = await supabase
         .from('work_schedule')
@@ -159,7 +169,6 @@ export default function MapPage() {
       const rows = (data ?? []) as WorkScheduleRow[];
       setWorks(rows);
 
-      // ดึง deptColorMap จาก state ปัจจุบัน (ไม่ใส่เป็น dependency)
       setDeptColorMap(prev => {
         const tasks: MapTask[] = rows
           .filter(w => w.lat && w.lng)
@@ -179,17 +188,32 @@ export default function MapPage() {
           });
 
         setMapTasks(tasks);
-        // set orderedTasks เป็น fallback — OSRM จะ override ทีหลังผ่าน handleOrderChange
-        setOrderedTasks(tasks);
-        return prev; // ไม่เปลี่ยน deptColorMap
+        // reset route ready เมื่อ tasks เปลี่ยน — OSRM จะ set isReady = true ทีหลัง
+        setIsRouteReady(false);
+        setOrderedTasks([]);
+        return prev;
       });
     };
     fetchWorks();
-  }, [selectedEmployeeId, supabase]); // ไม่ใส่ deptColorMap เพื่อกัน re-run
+  }, [selectedEmployeeId, supabase]);
 
-  const handleOrderChange = useCallback((newOrder: MapTask[]) => {
-    setOrderedTasks(newOrder);
+  // รับ callback จาก MapComponent พร้อม isReady flag
+  const handleOrderChange = useCallback((newOrder: MapTask[], isReady: boolean) => {
+    if (isReady) {
+      setOrderedTasks(newOrder);
+      setIsRouteReady(true);
+    } else {
+      // กำลังคำนวณ — reset
+      setOrderedTasks([]);
+      setIsRouteReady(false);
+    }
   }, []);
+
+  // reset route เมื่อ startPoint เปลี่ยน
+  useEffect(() => {
+    setIsRouteReady(false);
+    setOrderedTasks([]);
+  }, [startPoint]);
 
   // ===== Update status =====
   const updateStatus = async (id: string, status: 'pending' | 'inprogress' | 'complete') => {
@@ -215,7 +239,7 @@ export default function MapPage() {
       setSuggestions(results);
       setShowSuggestions(results.length > 0);
       setSearching(false);
-    }, 400); // debounce 400ms
+    }, 400);
   };
 
   const handleSelectSuggestion = (result: LongdoResult) => {
@@ -229,8 +253,8 @@ export default function MapPage() {
     if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
       pos => {
-        // GPS แค่ pan แผนที่ไปหาตำแหน่งปัจจุบัน — ไม่ set startPoint
         setGpsPos([pos.coords.latitude, pos.coords.longitude]);
+        setGpsTrigger(t => t + 1); // force flyTo ทุกครั้งที่กด แม้พิกัดเดิม
       },
       err => console.warn(err)
     );
@@ -377,7 +401,7 @@ export default function MapPage() {
             {/* Map */}
             <div className="bg-white p-2 rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden" style={{ height: 500 }}>
               {mapTasks.length > 0 ? (
-                <MapComponent tasks={mapTasks} startPoint={startPoint} gpsPos={gpsPos} onOrderChange={handleOrderChange} />
+                <MapComponent tasks={mapTasks} startPoint={startPoint} gpsPos={gpsPos} gpsTrigger={gpsTrigger} onOrderChange={handleOrderChange} />
               ) : (
                 <div className="h-full flex flex-col items-center justify-center text-slate-300">
                   <MapPin size={48} className="mb-3" />
@@ -387,14 +411,14 @@ export default function MapPage() {
               )}
             </div>
 
-            {/* Ordered route list — แสดงตลอดเวลา */}
+            {/* Ordered route list */}
             <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-slate-100">
               <h2 className="font-black text-slate-800 mb-4 flex items-center gap-2">
                 <Navigation size={18} className="text-blue-600" /> ลำดับเส้นทางที่เหมาะสม
               </h2>
               {!startPoint ? (
                 <p className="text-sm text-slate-400 font-bold text-center py-6">กรอกจุดเริ่มต้นเพื่อคำนวณเส้นทาง</p>
-              ) : orderedTasks.length === 0 ? (
+              ) : !isRouteReady ? (
                 <div className="flex items-center justify-center gap-2 py-6 text-slate-400">
                   <Loader2 size={16} className="animate-spin" />
                   <p className="text-sm font-bold">กำลังคำนวณเส้นทาง...</p>
@@ -444,9 +468,7 @@ export default function MapPage() {
                     <div key={work.id}
                       onClick={() => { setSelectedWork(work); setShowModal(true); }}
                       className="relative bg-white rounded-[2rem] border-2 border-slate-50 overflow-hidden flex items-stretch cursor-pointer hover:shadow-md transition-all">
-                      {/* แถบสีซ้าย gradient แนวตั้ง */}
                       <div className="w-2.5 shrink-0" style={barStyle} />
-
                       <div className="p-5 flex-grow">
                         <div className="flex items-center gap-3 mb-2 flex-wrap">
                           <span className={`text-[10px] font-black px-3 py-1 rounded-full text-white uppercase ${isOverdue ? 'bg-red-500' : isInProgress ? 'bg-amber-500' : 'bg-slate-400'}`}>
@@ -470,7 +492,7 @@ export default function MapPage() {
         )}
       </div>
 
-      {/* Modal — เหมือน home/calendar */}
+      {/* Modal */}
       {showModal && selectedWork && (() => {
         const roles = selectedWork.worker_role?.split(', ') ?? [];
         const colors = roles.map(r => deptColorMap[r] || '#94a3b8');
@@ -485,7 +507,6 @@ export default function MapPage() {
             <div className="bg-white rounded-[2.5rem] w-full max-w-lg shadow-2xl relative overflow-hidden"
               onClick={e => e.stopPropagation()}>
 
-              {/* gradient bar */}
               <div className="h-3 w-full" style={barStyle} />
 
               <div className="p-8 md:p-10">

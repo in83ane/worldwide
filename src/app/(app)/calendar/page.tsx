@@ -17,6 +17,7 @@ interface RawWorkSchedule {
     status: 'pending' | 'inprogress' | 'complete';
     completed_at: string | null;
     started_at?: string | null;
+    employee_ids: string[] | null;
 }
 
 interface WorkSchedule extends RawWorkSchedule {
@@ -66,6 +67,9 @@ export default function WorkCalendar() {
     const [selectedJobGroup, setSelectedJobGroup] = useState<WorkSchedule[]>([]);
     const [currentView, setCurrentView] = useState<'calendar' | 'daily'>('calendar');
     const [now, setNow] = useState(new Date());
+    const [currentEmployeeId, setCurrentEmployeeId] = useState<string | null>(null);
+    const [isAdmin, setIsAdmin] = useState(false);
+    const [deptColorMap, setDeptColorMap] = useState<Record<string, string>>({});
 
     useEffect(() => {
         const handlePopState = () => {
@@ -92,7 +96,7 @@ export default function WorkCalendar() {
         return () => clearInterval(timer);
     }, []);
 
-    const fetchWorkSchedules = async () => {
+    const fetchWorkSchedules = async (empId: string | null, admin: boolean) => {
         const { data: deptsData } = await supabase.from("departments").select("name, color_code");
         const depts = deptsData as Department[] | null;
 
@@ -101,7 +105,15 @@ export default function WorkCalendar() {
             return acc;
         }, {} as Record<string, string>);
 
-        const { data: worksData, error } = await supabase.from("work_schedule").select("*");
+        setDeptColorMap(deptColorMap);
+
+        let query = supabase.from("work_schedule").select("*");
+        // non-admin: filter เฉพาะงานที่ employee_ids มี id ของตัวเอง
+        if (!admin && empId) {
+            query = query.contains('employee_ids', [empId]);
+        }
+
+        const { data: worksData, error } = await query;
         if (error) return;
 
         const works = worksData as RawWorkSchedule[] | null;
@@ -126,7 +138,23 @@ export default function WorkCalendar() {
         setWorkSchedules(mappedData);
     };
 
-    useEffect(() => { fetchWorkSchedules(); }, [supabase]);
+    useEffect(() => {
+        const init = async () => {
+            const { data: { user: authUser } } = await supabase.auth.getUser();
+            if (!authUser) return;
+
+            const { data: profile } = await supabase.from("profiles").select("role").eq("id", authUser.id).single();
+            const { data: employee } = await supabase.from("employees").select("id").eq("user_id", authUser.id).single();
+
+            const admin = profile?.role === 'admin';
+            const empId = employee?.id ?? null;
+
+            setIsAdmin(admin);
+            setCurrentEmployeeId(empId);
+            await fetchWorkSchedules(empId, admin);
+        };
+        init();
+    }, [supabase]);
 
     const handlePrev = () => {
         if (currentView === 'daily' && selectedDate) {
@@ -194,7 +222,7 @@ export default function WorkCalendar() {
         if (status === 'inprogress') updateData.started_at = new Date().toISOString();
 
         const { error } = await supabase.from("work_schedule").update(updateData).in("id", ids);
-        if (!error) { fetchWorkSchedules(); setShowWorkModal(false); }
+        if (!error) { fetchWorkSchedules(currentEmployeeId, isAdmin); setShowWorkModal(false); }
     };
 
     const handleEventClick = (e: React.MouseEvent, group: WorkSchedule[]) => {
@@ -403,32 +431,77 @@ export default function WorkCalendar() {
             </div>
 
             {/* Modal */}
-            {showWorkModal && selectedWork && (
+            {showWorkModal && selectedWork && (() => {
+                const roles = selectedWork.worker_role ? selectedWork.worker_role.split(", ") : [];
+                const roleColors = roles.map(r => deptColorMap[r] || '#94a3b8');
+                const barStyle = roleColors.length > 1
+                    ? { background: `linear-gradient(to right, ${roleColors.join(", ")})` }
+                    : { backgroundColor: roleColors[0] || '#94a3b8' };
+                const mainColor = roleColors[0] || '#94a3b8';
+
+                return (
                 <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-4" onClick={() => setShowWorkModal(false)}>
-                    <div className="bg-white rounded-[2.5rem] w-full max-w-lg shadow-2xl p-10 relative overflow-hidden" onClick={e => e.stopPropagation()}>
-                        <div className="absolute top-0 left-0 w-full h-2" style={{ backgroundColor: selectedWork.deptColor }}></div>
-                        <div className="flex justify-between items-start mb-8">
-                            <div className="flex flex-col">
-                                <h3 className="text-2xl font-bold text-slate-800">{selectedJobGroup.map(w => cleanWorkerName(w.worker)).join(', ')}</h3>
-                                <p className="text-sm font-bold mt-1 uppercase tracking-widest" style={{ color: selectedWork.deptColor }}>{selectedWork.worker_role}</p>
+                    <div className="bg-white rounded-[2.5rem] w-full max-w-lg shadow-2xl relative overflow-hidden" onClick={e => e.stopPropagation()}>
+                        {/* gradient bar เหมือน home */}
+                        <div className="h-3 w-full" style={barStyle} />
+
+                        <div className="p-10">
+                            <div className="flex justify-between items-start mb-8">
+                                <div className="flex flex-col gap-2">
+                                    <h3 className="text-2xl font-black text-slate-800 leading-tight">รายละเอียดภารกิจ</h3>
+                                    {/* role badges ผสมสีตามแผนก */}
+                                    <div className="flex flex-wrap gap-2">
+                                        {roles.length > 0 ? roles.map((role, i) => (
+                                            <span key={role} className="px-3 py-1 rounded-lg text-[10px] font-black uppercase text-white shadow-sm"
+                                                style={{ backgroundColor: roleColors[i] || '#94a3b8' }}>
+                                                {role}
+                                            </span>
+                                        )) : (
+                                            <span className="px-3 py-1 rounded-lg text-[10px] font-black uppercase text-slate-400 bg-slate-100">ไม่ระบุแผนก</span>
+                                        )}
+                                    </div>
+                                </div>
+                                <button onClick={() => setShowWorkModal(false)} className="p-3 bg-slate-50 rounded-2xl text-slate-400 hover:bg-slate-100 transition-colors"><X size={20} /></button>
                             </div>
-                            <button onClick={() => setShowWorkModal(false)} className="p-3 bg-slate-50 rounded-2xl text-slate-400 hover:bg-slate-100 transition-colors"><X size={20} /></button>
-                        </div>
-                        <div className="space-y-4">
-                            <div className="grid grid-cols-2 gap-4 text-sm font-bold">
-                                <div className="p-5 bg-slate-50 rounded-2xl"><p className="text-[10px] text-slate-400 uppercase mb-2">หน่วยงาน</p><Building2 size={16} className="inline mr-1 text-blue-500" /> {selectedWork.department}</div>
-                                <div className="p-5 bg-slate-50 rounded-2xl"><p className="text-[10px] text-slate-400 uppercase mb-2">เวลาที่เสร็จ</p><Clock size={16} className="inline mr-1 text-blue-500" /> {selectedWork.status === 'complete' ? formatCompletedTime(selectedWork.completed_at) : "รอดำเนินการ"}</div>
+
+                            <div className="space-y-4">
+                                <div className="grid grid-cols-2 gap-4 text-sm font-bold">
+                                    <div className="p-5 bg-slate-50 rounded-2xl border border-slate-100">
+                                        <p className="text-[10px] text-slate-400 uppercase mb-2 font-black tracking-wider">หน่วยงาน</p>
+                                        <div className="flex items-center gap-2 text-slate-700"><Building2 size={16} className="text-blue-500" />{selectedWork.department}</div>
+                                    </div>
+                                    <div className="p-5 bg-slate-50 rounded-2xl border border-slate-100">
+                                        <p className="text-[10px] text-slate-400 uppercase mb-2 font-black tracking-wider">เวลานัดหมาย</p>
+                                        <div className="flex items-center gap-2 text-slate-700"><Clock size={16} className="text-blue-500" />{selectedWork.work_time} น.</div>
+                                    </div>
+                                </div>
+                                <div className="p-8 rounded-[2rem] bg-slate-900 text-white font-bold shadow-xl">
+                                    <p className="text-[10px] opacity-50 uppercase mb-3 font-black tracking-widest">รายละเอียดภารกิจ</p>
+                                    <p className="text-lg leading-relaxed">{selectedWork.detail || "ไม่มีรายละเอียดเพิ่มเติม"}</p>
+                                </div>
                             </div>
-                            <div className="p-8 rounded-[2rem] text-white font-bold shadow-xl" style={{ backgroundColor: selectedWork.deptColor }}><p className="text-[10px] opacity-70 uppercase mb-3 font-black">รายละเอียดงาน</p><p className="text-lg leading-relaxed">{selectedWork.detail}</p></div>
-                        </div>
-                        <div className="flex gap-4 mt-10">
-                            {selectedWork.status === 'pending' && <button onClick={() => updateWorkStatus(selectedJobGroup.map(w => w.id), 'inprogress')} className="flex-[2] py-4 rounded-2xl text-white font-bold text-sm shadow-md" style={{ backgroundColor: selectedWork.deptColor }}>เริ่มงาน</button>}
-                            {selectedWork.status === 'inprogress' && <button onClick={() => updateWorkStatus(selectedJobGroup.map(w => w.id), 'complete')} className="flex-[2] bg-emerald-600 py-4 rounded-2xl text-white font-bold text-sm shadow-md">เสร็จสิ้นงาน</button>}
-                            <button onClick={() => setShowWorkModal(false)} className="flex-1 py-4 bg-slate-100 rounded-2xl font-bold text-sm text-slate-500 hover:bg-slate-200 transition-colors">ย้อนกลับ</button>
+
+                            <div className="flex gap-4 mt-10">
+                                {selectedWork.status === 'pending' && (
+                                    <button onClick={() => updateWorkStatus(selectedJobGroup.map(w => w.id), 'inprogress')}
+                                        className="flex-[2] py-4 rounded-2xl text-white font-black text-sm shadow-lg active:scale-95 transition-all"
+                                        style={{ backgroundColor: mainColor }}>
+                                        เริ่มดำเนินงาน
+                                    </button>
+                                )}
+                                {selectedWork.status === 'inprogress' && (
+                                    <button onClick={() => updateWorkStatus(selectedJobGroup.map(w => w.id), 'complete')}
+                                        className="flex-[2] bg-emerald-600 py-4 rounded-2xl text-white font-black text-sm shadow-lg hover:bg-emerald-700 active:scale-95 transition-all">
+                                        เสร็จสิ้นภารกิจ
+                                    </button>
+                                )}
+                                <button onClick={() => setShowWorkModal(false)} className="flex-1 py-4 bg-slate-100 rounded-2xl font-black text-sm text-slate-500 hover:bg-slate-200 transition-colors active:scale-95">ย้อนกลับ</button>
+                            </div>
                         </div>
                     </div>
                 </div>
-            )}
+                );
+            })()}
         </div>
     );
 }

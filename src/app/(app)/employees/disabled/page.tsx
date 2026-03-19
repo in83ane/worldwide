@@ -50,7 +50,6 @@ export default function DisabledEmployeesPage() {
 
     useEffect(() => { fetchDisabled(); }, [fetchDisabled]);
 
-    // ฟังก์ชันดึงกลับเข้าทำงาน + สร้างบัญชีใหม่ทันที
     const handleRestore = async (emp: Employee) => {
         const email = prompt(`ดึงคุณ ${emp.name} กลับเข้าทำงาน\nกรุณาระบุ Email สำหรับใช้ Login:`);
         if (!email) return;
@@ -64,32 +63,21 @@ export default function DisabledEmployeesPage() {
 
         setLoading(true);
         try {
-            // 1. เรียก API เพื่อสร้าง Auth User ใหม่ (เพราะของเดิมถูกลบไปแล้ว)
             const res = await fetch('/employees/api', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    email: email,
-                    password: password,
-                    name: emp.name
-                })
+                body: JSON.stringify({ email, password, name: emp.name })
             });
 
             const authRes = await res.json();
             if (authRes.error) throw new Error(authRes.error);
 
             const newUserId = authRes.user.id;
+            await supabase.from("profiles").update({ email }).eq("id", newUserId);
 
-            // 2. อัปเดตข้อมูลใน profiles (ถ้ามีตารางแยก)
-            await supabase.from("profiles").update({ email: email }).eq("id", newUserId);
-
-            // 3. อัปเดตตาราง employees ให้กลับมาใช้งานได้และผูก user_id ใหม่
             const { error: updateError } = await supabase
                 .from("employees")
-                .update({ 
-                    is_active: true, 
-                    user_id: newUserId 
-                })
+                .update({ is_active: true, user_id: newUserId })
                 .eq("id", emp.id);
 
             if (updateError) throw updateError;
@@ -97,21 +85,41 @@ export default function DisabledEmployeesPage() {
             alert(`ดึงคุณ ${emp.name} กลับเข้าทำงานและสร้างบัญชีใหม่เรียบร้อยแล้ว`);
             setEmployees(prev => prev.filter(e => e.id !== emp.id));
         } catch (err) {
-            const errorMessage = err instanceof Error ? err.message : "เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุ";
-            alert("เกิดข้อผิดพลาด: " + errorMessage);
+            alert("เกิดข้อผิดพลาด: " + (err instanceof Error ? err.message : "ไม่ทราบสาเหตุ"));
         } finally {
             setLoading(false);
         }
     };
 
     const handleDeleteForever = async (emp: Employee) => {
-        if(confirm(`ยืนยันการลบคุณ ${emp.name} ออกจากระบบถาวร?\n(ข้อมูลประวัติพนักงานจะหายไปทั้งหมดและไม่สามารถกู้คืนได้)`)) {
-            const { error } = await supabase.from("employees").delete().eq("id", emp.id);
-            if (!error) {
-                setEmployees(prev => prev.filter(e => e.id !== emp.id));
-            } else {
-                alert("ไม่สามารถลบข้อมูลได้");
+        if (!confirm(`ยืนยันการลบคุณ ${emp.name} ออกจากระบบถาวร?\n(ข้อมูลและบัญชีผู้ใช้จะหายไปทั้งหมดและไม่สามารถกู้คืนได้)`)) return;
+
+        setLoading(true);
+        try {
+            // 1. ลบบัญชีใน auth.users ก่อน (ถ้ามี user_id)
+            //    เพื่อไม่ให้ login ได้อีกต่อไป
+            if (emp.user_id) {
+                const res = await fetch('/employees/api', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId: emp.user_id }),
+                });
+                const result = await res.json();
+                // ถ้า error ที่ไม่ใช่ "not found" ให้หยุด
+                if (!res.ok && !result.error?.includes('not found')) {
+                    throw new Error(result.error || 'ลบบัญชีไม่สำเร็จ');
+                }
             }
+
+            // 2. ลบแถวใน employees
+            const { error } = await supabase.from("employees").delete().eq("id", emp.id);
+            if (error) throw error;
+
+            setEmployees(prev => prev.filter(e => e.id !== emp.id));
+        } catch (err) {
+            alert("ไม่สามารถลบข้อมูลได้: " + (err instanceof Error ? err.message : "ไม่ทราบสาเหตุ"));
+        } finally {
+            setLoading(false);
         }
     };
 

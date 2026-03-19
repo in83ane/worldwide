@@ -2,212 +2,131 @@
 
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Button } from '@/components/ui/button'
-import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { useRouter } from 'next/navigation' // เพิ่ม useRouter สำหรับการ Redirect
+import { useRouter } from 'next/navigation'
 
-// ตรวจสอบให้แน่ใจว่าคุณได้สร้างตาราง 'profiles' ที่มีคอลัมน์ 'id' และ 'role' แล้ว
-
-export default function AuthPage() {
+export default function LoginPage() {
   const supabase = createClient()
-  const router = useRouter() // สร้าง instance ของ router
+  const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-  const [isLogin, setIsLogin] = useState(true)
 
-  const handleAuth = async () => {
-    setLoading(true)
+  const handleLogin = async () => {
     setError(null)
 
-    // 1. Validation เบื้องต้น
     if (!email || !password) {
       setError('กรุณากรอก Email และ Password')
-      setLoading(false)
       return
     }
 
-    if (!isLogin && password !== confirmPassword) {
-      setError('Password ไม่ตรงกัน')
-      setLoading(false)
-      return
-    }
-
-    if (password.length < 6) {
-      setError('Password ต้องมีอย่างน้อย 6 ตัวอักษร')
-      setLoading(false)
-      return
-    }
+    setLoading(true)
 
     try {
-      let response
-      
-      if (isLogin) {
-        // 2. Login
-        response = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        })
-      } else {
-        // 3. Register: สร้างผู้ใช้ใน auth.users
-        response = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            // ใช้ window.location.origin สำหรับการ Redirect ที่ถูกต้อง
-            emailRedirectTo: `${window.location.origin}/home`,
-          },
-        })
+      const { error } = await supabase.auth.signInWithPassword({ email, password })
 
-        // จัดการ Auth error ทันที
-        if (response.error) {
-          throw response.error
-        }
-        
-        // 4. บันทึกข้อมูล Profile (Role) ลงในตาราง profiles
-        const user = response.data.user
-        if (user) {
-          // ใช้ insert เพื่อเพิ่มแถวใหม่ในตาราง profiles
-          const { error: dbError } = await supabase.from('profiles').insert([
-            { 
-              id: user.id, 
-              email: user.email,
-              role: 'user', // กำหนด role เริ่มต้นเป็น 'user'
-            },
-          ])
-
-          if (dbError) {
-            // หาก Insert ล้มเหลว ให้แสดง error จาก DB และหยุด
-            console.error('Database Insert Error:', dbError)
-            // ข้อความนี้จะช่วยให้คุณ debug ปัญหา RLS/Schema
-            throw new Error(`Database error saving new user: ${dbError.message}. ตรวจสอบ RLS Policy สำหรับ INSERT บนตาราง profiles`)
-          }
-        }
-      }
-
-      // 5. จัดการ Success และ Redirect/Alert
-      if (response.error) {
-        // จัดการ error จาก Login หรือ Auth error อื่นๆ
-        if (response.error.message.includes('already registered')) {
-          setError('Email นี้สมัครไปแล้ว')
-        } else if (response.error.message.includes('invalid email')) {
-          setError('Email ไม่ถูกต้อง')
+      if (error) {
+        if (error.message.includes('Invalid login credentials')) {
+          setError('Email หรือ Password ไม่ถูกต้อง')
         } else {
-          setError(response.error.message)
+          setError(error.message)
         }
-      } else {
-        // Success
-        if (isLogin) {
-          // หาก Login สำเร็จ ใช้วิธี Redirect ของ Next.js
-          router.push('/home')
-        } else {
-          // หาก Register สำเร็จและ Insert DB สำเร็จ
-          alert('สมัครสมาชิกสำเร็จ! โปรดยืนยัน Email ของคุณ')
-          setIsLogin(true)
-        }
+        return
       }
-    // ***************************************************************
-    // ** จุดที่ทำการแก้ไข: เปลี่ยน 'any' เป็น 'unknown' และจัดการ Type **
-    // ***************************************************************
-    } catch (err: unknown) { 
-      // จับ error ที่ throw มาจากทั้ง Auth และ Database Insert และจัดการ type 'unknown'
-      
-      let errorMessage = 'เกิดข้อผิดพลาดบางอย่าง'
-      
-      // ตรวจสอบว่า err เป็น object ที่มี property message หรือไม่
-      if (err && typeof err === 'object' && 'message' in err && typeof (err as { message: unknown }).message === 'string') {
-          errorMessage = (err as { message: string }).message
-      } else if (err instanceof Error) {
-          errorMessage = err.message
-      }
-      
-      // หากข้อความ error เกี่ยวกับ RLS ให้ระบุชัดเจน
-      if (errorMessage.includes('Row Level Security')) {
-          errorMessage = "ข้อผิดพลาดด้านความปลอดภัย: ตรวจสอบ RLS Policy ในตาราง Profiles"
-      }
-      
-      setError(errorMessage)
 
+      router.push('/home')
+    } catch {
+      setError('เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง')
     } finally {
       setLoading(false)
     }
   }
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') handleLogin()
+  }
+
   return (
-    <main className="min-h-dvh grid place-items-center p-6">
-      <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle className="text-2xl">{isLogin ? 'เข้าสู่ระบบ' : 'สมัครสมาชิก'}</CardTitle>
-        </CardHeader>
-        
-        <div className="p-6 pt-0">
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="email" className="block mb-1">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="example@email.com"
-              />
-            </div>
-            <div>
-              <Label htmlFor="password" className="block mb-1">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="รหัสผ่าน"
-              />
-            </div>
+    <main className="min-h-dvh grid place-items-center p-6 bg-gray-50">
+      <div className="w-full max-w-sm">
+        {/* Logo / Header */}
+        <div className="mb-8 text-center">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gray-900 mb-4">
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+            </svg>
+          </div>
+          <h1 className="text-2xl font-semibold text-gray-900 tracking-tight">เข้าสู่ระบบ</h1>
+          <p className="text-sm text-gray-500 mt-1">กรอกข้อมูลที่ได้รับจากผู้ดูแลระบบ</p>
+        </div>
 
-            {!isLogin && (
-              <div>
-                <Label htmlFor="confirmPassword" className="block mb-1">Confirm Password</Label>
-                <Input
-                  id="confirmPassword"
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="ยืนยันรหัสผ่าน"
-                />
-              </div>
-            )}
-
-            {error && <p className="text-red-500 text-sm mt-3">{error}</p>}
+        {/* Card */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">
+          {/* Email */}
+          <div className="space-y-1.5">
+            <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+              Email
+            </label>
+            <input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="yourname@company.com"
+              className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all placeholder:text-gray-300"
+            />
           </div>
 
-          <CardFooter className="p-0 pt-6 flex flex-col items-center">
-            <Button className="w-full" onClick={handleAuth} disabled={loading}>
-              {loading ? 'กำลังโหลด...' : isLogin ? 'เข้าสู่ระบบ' : 'สมัครสมาชิก'}
-            </Button>
+          {/* Password */}
+          <div className="space-y-1.5">
+            <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+              Password
+            </label>
+            <input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="••••••••"
+              className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all placeholder:text-gray-300"
+            />
+          </div>
 
-            <p className="text-center text-sm mt-4">
-              {isLogin ? (
-                <>
-                  ยังไม่มีบัญชี?{' '}
-                  <button type="button" className="text-blue-500 hover:underline" onClick={() => setIsLogin(false)}>
-                    สมัครสมาชิก
-                  </button>
-                </>
-              ) : (
-                <>
-                  มีบัญชีแล้ว?{' '}
-                  <button type="button" className="text-blue-500 hover:underline" onClick={() => setIsLogin(true)}>
-                    เข้าสู่ระบบ
-                  </button>
-                </>
-              )}
-            </p>
-          </CardFooter>
+          {/* Error */}
+          {error && (
+            <div className="flex items-start gap-2.5 p-3.5 rounded-xl bg-red-50 border border-red-100">
+              <svg className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+              </svg>
+              <p className="text-sm text-red-600">{error}</p>
+            </div>
+          )}
+
+          {/* Submit */}
+          <button
+            onClick={handleLogin}
+            disabled={loading}
+            className="w-full py-2.5 px-4 rounded-xl text-sm font-medium text-white bg-gray-900 hover:bg-gray-800 active:bg-gray-950 disabled:opacity-50 disabled:cursor-not-allowed transition-all mt-2"
+          >
+            {loading ? (
+              <span className="flex items-center justify-center gap-2">
+                <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                กำลังเข้าสู่ระบบ...
+              </span>
+            ) : 'เข้าสู่ระบบ'}
+          </button>
         </div>
-      </Card>
+
+        {/* Helper text */}
+        <p className="text-center text-xs text-gray-400 mt-5">
+          หากลืมรหัสผ่าน กรุณาติดต่อผู้ดูแลระบบ (Admin)
+        </p>
+      </div>
     </main>
   )
 }

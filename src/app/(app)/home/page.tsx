@@ -37,8 +37,8 @@ interface WorkForm {
     detail: string;
     worker_role: string[];
     current_worker_input: string;
-    selected_workers: string[];      // ชื่อ (สำหรับ display และบันทึก worker field)
-    selected_worker_ids: string[];   // id (สำหรับเช็ค conflict และบันทึก employee_id)
+    selected_workers: string[];
+    selected_worker_ids: string[];
 }
 
 const getAvatarUrl = (name: string) => {
@@ -116,7 +116,6 @@ export default function HomePage() {
 
     const isAdmin = user?.role === 'admin';
 
-    // Map สีของแผนกเก็บไว้ใน Object เพื่อให้เรียกใช้ง่ายๆ
     const deptColorMap = useMemo(() => {
         return departments.reduce((acc, curr) => {
             acc[curr.name] = curr.color_code;
@@ -131,13 +130,11 @@ export default function HomePage() {
         );
 
         return deptWorkers.map(emp => {
-            // นับ load จาก employee_ids array — แม่นแม้ชื่อซ้ำ
             const load = allWorkData.filter(w => {
                 if (w.status === 'complete') return false;
                 return (w.employee_ids ?? []).includes(emp.id);
             }).length;
 
-            // เช็ค conflict จาก employee_ids — วันและเวลาเดียวกัน
             const hasConflict = allWorkData.some(w => {
                 if (w.id === editingId || w.status === 'complete') return false;
                 if (w.work_date !== formData.work_date || w.work_time !== formData.work_time) return false;
@@ -152,7 +149,6 @@ export default function HomePage() {
         try {
             let scheduleQuery = supabase.from("work_schedule").select("*");
             if (activeRole !== 'admin' && activeEmployeeId) {
-                // filter ด้วย employee_ids array — แม่นแม้ชื่อซ้ำกัน
                 scheduleQuery = scheduleQuery.contains('employee_ids', [activeEmployeeId]);
             }
             const [scheduleRes, empsRes, deptsRes] = await Promise.all([
@@ -194,7 +190,6 @@ export default function HomePage() {
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, [supabase, router, refreshData]);
 
-    // location autocomplete
     const handleLocationInput = (value: string) => {
         setFormData(prev => ({ ...prev, department: value }));
         if (locationDebounce.current) clearTimeout(locationDebounce.current);
@@ -236,7 +231,7 @@ export default function HomePage() {
             const data = await res.json();
             const item = data.data?.[0];
             if (item?.lat && item?.lon) return { lat: item.lat, lng: item.lon };
-        } catch { /* บันทึกได้โดยไม่มี lat/lng */ }
+        } catch { }
         return null;
     };
 
@@ -245,7 +240,6 @@ export default function HomePage() {
         if (formData.worker_role.length === 0) return alert("กรุณาเลือกอย่างน้อย 1 แผนก");
         setSubmitting(true);
 
-        // geocode ชื่อสถานที่ → lat/lng อัตโนมัติ
         const coords = formData.department ? await geocodeDepartment(formData.department) : null;
 
         const payload = {
@@ -275,11 +269,17 @@ export default function HomePage() {
         setSubmitting(false);
     };
 
+    // ปกติซ่อนงานที่เสร็จแล้ว — แต่ถ้ากำลังค้นหาให้แสดงทั้งหมดรวม complete ด้วย
     const filteredWork = useMemo(() => {
         const lower = searchTerm.toLowerCase();
-        const baseData = [...allWorkData];
-        if (!searchTerm.trim()) return baseData;
-        return baseData.filter(item =>
+
+        if (!searchTerm.trim()) {
+            // ไม่ได้ค้นหา → แสดงเฉพาะงานที่ยังไม่เสร็จ
+            return [...allWorkData].filter(item => item.status !== 'complete');
+        }
+
+        // กำลังค้นหา → แสดงทั้งหมดรวมงานที่เสร็จแล้ว
+        return [...allWorkData].filter(item =>
             ((item.department ?? "") + (item.detail ?? "") + (item.worker ?? "") + (item.worker_role ?? ""))
                 .toLowerCase().includes(lower)
         );
@@ -333,7 +333,7 @@ export default function HomePage() {
                     </div>
                     
                     <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
                             <div className="flex flex-col gap-2">
                                 <label className="text-xs font-black uppercase opacity-50 ml-2 tracking-wider">วันที่เริ่ม</label>
                                 <input type="date" required className="h-[60px] px-4 bg-slate-50 border-2 rounded-2xl font-bold outline-none w-full focus:bg-white focus:border-slate-900 transition-all" value={formData.work_date} onChange={e => setFormData({ ...formData, work_date: e.target.value })} />
@@ -342,20 +342,37 @@ export default function HomePage() {
                                 <label className="text-xs font-black uppercase opacity-50 ml-2 tracking-wider">เวลานัดหมาย</label>
                                 <input type="time" required className="h-[60px] px-4 bg-slate-50 border-2 rounded-2xl font-bold outline-none w-full focus:bg-white focus:border-slate-900 transition-all" value={formData.work_time} onChange={e => setFormData({ ...formData, work_time: e.target.value })} />
                             </div>
-                            <div className="md:col-span-2 relative" ref={deptDropdownRef}>
+                            <div className="md:col-span-2 relative flex flex-col gap-2" ref={deptDropdownRef}>
                                 <label className="text-xs font-black uppercase opacity-50 ml-2 tracking-wider">ประเภทงาน (เลือกหลายแผนก)</label>
-                                <button type="button" onClick={() => setIsDeptOpen(!isDeptOpen)} className="h-[60px] w-full mt-2 px-4 bg-slate-50 border-2 rounded-2xl font-bold text-left flex justify-between items-center hover:border-slate-400 transition-all">
+                                <button type="button" onClick={() => setIsDeptOpen(!isDeptOpen)} className="h-[60px] w-full px-4 bg-slate-50 border-2 rounded-2xl font-bold text-left flex justify-between items-center hover:border-slate-400 transition-all">
                                     <span className="truncate">{formData.worker_role.length > 0 ? formData.worker_role.join(", ") : "คลิกเพื่อเลือกแผนก..."}</span>
                                     <ChevronDown size={20} className={`transition-transform ${isDeptOpen ? 'rotate-180' : ''}`} />
                                 </button>
                                 {isDeptOpen && (
-                                    <div className="absolute z-[110] w-full bg-white shadow-2xl rounded-3xl mt-2 p-3 border-2 border-slate-100 grid grid-cols-1 gap-1">
+                                    <div className="absolute z-[110] w-full top-[95px] bg-white shadow-2xl rounded-3xl p-3 border-2 border-slate-100 grid grid-cols-1 gap-1">
                                         {departments.map(dept => {
                                             const isChecked = formData.worker_role.includes(dept.name);
                                             return (
                                                 <button key={dept.id} type="button" onClick={() => {
                                                     const newRoles = isChecked ? formData.worker_role.filter(r => r !== dept.name) : [...formData.worker_role, dept.name];
-                                                    setFormData({ ...formData, worker_role: newRoles, selected_workers: [] });
+                                                    
+                                                    const updatedWorkers: string[] = [];
+                                                    const updatedWorkerIds: string[] = [];
+
+                                                    formData.selected_worker_ids.forEach((id, index) => {
+                                                        const emp = masterEmployees.find(e => e.id === id);
+                                                        if (emp && emp.departments && newRoles.includes(emp.departments.name)) {
+                                                            updatedWorkers.push(formData.selected_workers[index]);
+                                                            updatedWorkerIds.push(id);
+                                                        }
+                                                    });
+
+                                                    setFormData({ 
+                                                        ...formData, 
+                                                        worker_role: newRoles,
+                                                        selected_workers: updatedWorkers,
+                                                        selected_worker_ids: updatedWorkerIds
+                                                    });
                                                 }} className={`flex items-center justify-between p-4 rounded-2xl transition-all ${isChecked ? 'bg-slate-900 text-white' : 'hover:bg-slate-50'}`}>
                                                     <span className="font-bold">{dept.name}</span>
                                                     <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center ${isChecked ? 'bg-emerald-500 border-emerald-500' : 'bg-white border-slate-200'}`}>
@@ -466,7 +483,6 @@ export default function HomePage() {
 
                         return (
                             <div key={item.id} className={`relative bg-white rounded-[2.5rem] shadow-sm border-2 border-slate-50 overflow-hidden flex flex-col md:flex-row items-stretch transition-all hover:shadow-md ${isComplete ? 'opacity-70 grayscale-[0.5]' : ''}`}>
-                                {/* แถบสีซ้าย — gradient แนวตั้งผสมสีทุก role */}
                                 <div className="absolute left-0 top-0 bottom-0 w-2.5 z-10" style={{
                                     background: roles.length > 1
                                         ? `linear-gradient(to bottom, ${roles.map(r => deptColorMap[r] || '#94a3b8').join(", ")})`
@@ -474,7 +490,6 @@ export default function HomePage() {
                                 }} />
                                 <div className="bg-slate-50/50 w-full md:w-56 p-6 flex flex-col items-center justify-center border-r-2 border-slate-50">
                                     <div className="text-2xl font-black text-slate-800">{formatDisplayDate(item.work_date)}</div>
-                                    {/* เวลา — ตัวหนังสือสีดำ ไม่มีกรอบ */}
                                     <div className="mt-4 font-black text-xl text-slate-800 flex items-center gap-2">
                                         <Clock size={20} /> {item.work_time} น.
                                     </div>
@@ -533,7 +548,13 @@ export default function HomePage() {
                                             setFormData({ ...initialFormState, work_date: item.work_date, work_time: item.work_time, department: item.department, detail: item.detail, worker_role: item.worker_role.split(", "), selected_workers: workerNames, selected_worker_ids: workerIds }); 
                                             window.scrollTo({ top: 0, behavior: 'smooth' }); 
                                         }} className="w-14 h-14 flex items-center justify-center bg-white rounded-2xl shadow-sm border-2 border-slate-100 text-orange-500 hover:bg-orange-500 hover:text-white transition-all"><Pencil size={24} /></button>
-                                        <button onClick={async (e) => { e.stopPropagation(); if (confirm('ลบงานนี้?')) { await supabase.from("work_schedule").delete().eq("id", item.id); if (user) refreshData(user.role, user.employeeId ?? null); } }} className="w-14 h-14 flex items-center justify-center bg-red-50 rounded-2xl shadow-sm border-2 border-red-100 text-red-500 hover:bg-red-500 hover:text-white transition-all"><Trash2 size={24} /></button>
+                                        <button onClick={async (e) => { 
+                                            e.stopPropagation(); 
+                                            if (confirm('ลบงานนี้?')) { 
+                                                await supabase.from("work_schedule").delete().eq("id", item.id); 
+                                                if (user) refreshData(user.role, user.employeeId ?? null); 
+                                            } 
+                                        }} className="w-14 h-14 flex items-center justify-center bg-red-50 rounded-2xl shadow-sm border-2 border-red-100 text-red-500 hover:bg-red-500 hover:text-white transition-all"><Trash2 size={24} /></button>
                                     </div>
                                 )}
                             </div>
@@ -542,7 +563,6 @@ export default function HomePage() {
                 </div>
             </section>
 
-            {/* --- Modal แสดงรายละเอียดภารกิจ --- */}
             {showWorkModal && selectedWork && (
                 <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[200] flex items-center justify-center p-4" onClick={() => setShowWorkModal(false)}>
                     <div className="bg-white rounded-[2.5rem] w-full max-w-lg shadow-2xl relative overflow-hidden animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
@@ -554,7 +574,6 @@ export default function HomePage() {
                                     : (deptColorMap[selectedWork.worker_role?.split(", ")[0] || ""] || '#94a3b8')
                             }} 
                         />
-
                         <div className="p-8 md:p-10">
                             <div className="flex justify-between items-start mb-8">
                                 <div className="flex flex-col gap-2">
@@ -611,14 +630,7 @@ export default function HomePage() {
                                                 const empColor = deptColorMap[empDept] || '#64748b';
                                                 
                                                 return (
-                                                    <div 
-                                                        key={idx} 
-                                                        className="flex items-center justify-between p-3 rounded-2xl border-2 transition-all"
-                                                        style={{ 
-                                                            borderColor: `${empColor}20`, 
-                                                            backgroundColor: `${empColor}05` 
-                                                        }}
-                                                    >
+                                                    <div key={idx} className="flex items-center justify-between p-3 rounded-2xl border-2 transition-all" style={{ borderColor: `${empColor}20`, backgroundColor: `${empColor}05` }}>
                                                         <div className="flex items-center gap-3">
                                                             <div className="w-12 h-12 rounded-xl border-4 overflow-hidden shadow-sm" style={{ borderColor: empColor }}>
                                                                 <img src={emp?.image_url || getAvatarUrl(workerName)} className="w-full h-full object-cover" />
@@ -633,9 +645,7 @@ export default function HomePage() {
                                                 );
                                             })
                                         ) : (
-                                            <div className="p-4 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200 text-center text-slate-400 font-bold text-sm">
-                                                ยังไม่มีการมอบหมายช่าง
-                                            </div>
+                                            <div className="p-4 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200 text-center text-slate-400 font-bold text-sm">ยังไม่มีการมอบหมายช่าง</div>
                                         )}
                                     </div>
                                 </div>
@@ -648,34 +658,12 @@ export default function HomePage() {
 
                             <div className="flex gap-4 mt-10">
                                 {selectedWork.status === 'pending' && (
-                                    <button 
-                                        onClick={async () => { 
-                                            await supabase.from("work_schedule").update({ status: 'inprogress' }).eq("id", selectedWork.id); 
-                                            if (user) refreshData(user.role, user.employeeId ?? null); 
-                                            setShowWorkModal(false); 
-                                        }} 
-                                        className="flex-[2] py-4 bg-blue-600 rounded-2xl text-white font-black text-sm shadow-lg hover:bg-blue-700 active:scale-95 transition-all"
-                                    >
-                                        เริ่มดำเนินงาน
-                                    </button>
+                                    <button onClick={async () => { await supabase.from("work_schedule").update({ status: 'inprogress' }).eq("id", selectedWork.id); if (user) refreshData(user.role, user.employeeId ?? null); setShowWorkModal(false); }} className="flex-[2] py-4 bg-blue-600 rounded-2xl text-white font-black text-sm shadow-lg hover:bg-blue-700 active:scale-95 transition-all">เริ่มดำเนินงาน</button>
                                 )}
-                                
                                 {selectedWork.status === 'inprogress' && (
-                                    <button 
-                                        onClick={async () => { 
-                                            await supabase.from("work_schedule").update({ status: 'complete', completed_at: new Date().toISOString() }).eq("id", selectedWork.id); 
-                                            if (user) refreshData(user.role, user.employeeId ?? null); 
-                                            setShowWorkModal(false); 
-                                        }} 
-                                        className="flex-[2] bg-emerald-600 py-4 rounded-2xl text-white font-black text-sm shadow-lg hover:bg-emerald-700 active:scale-95 transition-all"
-                                    >
-                                        เสร็จสิ้นภารกิจ
-                                    </button>
+                                    <button onClick={async () => { await supabase.from("work_schedule").update({ status: 'complete', completed_at: new Date().toISOString() }).eq("id", selectedWork.id); if (user) refreshData(user.role, user.employeeId ?? null); setShowWorkModal(false); }} className="flex-[2] bg-emerald-600 py-4 rounded-2xl text-white font-black text-sm shadow-lg hover:bg-emerald-700 active:scale-95 transition-all">เสร็จสิ้นภารกิจ</button>
                                 )}
-                                
-                                <button onClick={() => setShowWorkModal(false)} className="flex-1 py-4 bg-slate-100 rounded-2xl font-black text-sm text-slate-500 hover:bg-slate-200 transition-colors active:scale-95">
-                                    ย้อนกลับ
-                                </button>
+                                <button onClick={() => setShowWorkModal(false)} className="flex-1 py-4 bg-slate-100 rounded-2xl font-black text-sm text-slate-500 hover:bg-slate-200 transition-colors active:scale-95">ย้อนกลับ</button>
                             </div>
                         </div>
                     </div>

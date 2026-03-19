@@ -49,7 +49,6 @@ export default function LoginPage() {
   return (
     <main className="min-h-dvh grid place-items-center p-6 bg-gray-50">
       <div className="w-full max-w-sm">
-        {/* Logo / Header */}
         <div className="mb-8 text-center">
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gray-900 mb-4">
             <svg xmlns="http://www.w3.org/2000/svg" className="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
@@ -57,12 +56,8 @@ export default function LoginPage() {
             </svg>
           </div>
           <h1 className="text-2xl font-semibold text-gray-900 tracking-tight">เข้าสู่ระบบ</h1>
-          <p className="text-sm text-gray-500 mt-1">กรอกข้อมูลที่ได้รับจากผู้ดูแลระบบ</p>
         </div>
-
-        {/* Card */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">
-          {/* Email */}
           <div className="space-y-1.5">
             <label htmlFor="email" className="block text-sm font-medium text-gray-700">
               Email
@@ -73,12 +68,10 @@ export default function LoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="yourname@company.com"
+              placeholder="Email@example.com"
               className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all placeholder:text-gray-300"
             />
           </div>
-
-          {/* Password */}
           <div className="space-y-1.5">
             <label htmlFor="password" className="block text-sm font-medium text-gray-700">
               Password
@@ -94,7 +87,6 @@ export default function LoginPage() {
             />
           </div>
 
-          {/* Error */}
           {error && (
             <div className="flex items-start gap-2.5 p-3.5 rounded-xl bg-red-50 border border-red-100">
               <svg className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -104,7 +96,6 @@ export default function LoginPage() {
             </div>
           )}
 
-          {/* Submit */}
           <button
             onClick={handleLogin}
             disabled={loading}
@@ -122,9 +113,8 @@ export default function LoginPage() {
           </button>
         </div>
 
-        {/* Helper text */}
         <p className="text-center text-xs text-gray-400 mt-5">
-          หากลืมรหัสผ่าน กรุณาติดต่อผู้ดูแลระบบ (Admin)
+          หากลืมรหัสผ่าน กรุณาติดต่อผู้ดูแลระบบ
         </p>
       </div>
     </main>

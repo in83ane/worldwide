@@ -448,7 +448,7 @@ export default function WorkCalendar() {
                         <div className="p-10">
                             <div className="flex justify-between items-start mb-8">
                                 <div className="flex flex-col gap-2">
-                                    <h3 className="text-2xl font-black text-slate-800 leading-tight">รายละเอียดภารกิจ</h3>
+                                    <h3 className="text-2xl font-black text-slate-800 leading-tight">รายละเอียดงาน</h3>
                                     {/* role badges ผสมสีตามแผนก */}
                                     <div className="flex flex-wrap gap-2">
                                         {roles.length > 0 ? roles.map((role, i) => (
@@ -476,7 +476,7 @@ export default function WorkCalendar() {
                                     </div>
                                 </div>
                                 <div className="p-8 rounded-[2rem] bg-slate-900 text-white font-bold shadow-xl">
-                                    <p className="text-[10px] opacity-50 uppercase mb-3 font-black tracking-widest">รายละเอียดภารกิจ</p>
+                                    <p className="text-[10px] opacity-50 uppercase mb-3 font-black tracking-widest">รายละเอียดงาน</p>
                                     <p className="text-lg leading-relaxed">{selectedWork.detail || "ไม่มีรายละเอียดเพิ่มเติม"}</p>
                                 </div>
                             </div>

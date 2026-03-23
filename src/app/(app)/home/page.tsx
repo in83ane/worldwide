@@ -1,5 +1,5 @@
 "use client";
-
+import MainLayout from "@/components/MainLayout";
 import React, { useMemo, useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -288,7 +288,7 @@ export default function HomePage() {
     if (loading) return <div className="h-screen flex items-center justify-center font-black text-slate-400 text-2xl animate-pulse">Loading...</div>;
 
     return (
-        <main className={`transition-all duration-300 ${isTableZoomed ? 'fixed inset-0 bg-slate-50 z-50 p-4 overflow-y-auto' : 'max-w-[1400px] mx-auto p-4 md:p-8'}`}>
+        <MainLayout>
             <style dangerouslySetInnerHTML={{
                 __html: `
                 @keyframes status-glow-red { 0%, 100% { background-color: #ffffff; } 50% { background-color: #fef2f2; } }
@@ -449,8 +449,8 @@ export default function HomePage() {
                         </div>
 
                         <div className="flex flex-col gap-2">
-                            <label className="text-xs font-black uppercase opacity-50 ml-2 tracking-wider">รายละเอียดภารกิจ</label>
-                            <textarea rows={3} required className="p-5 bg-slate-50 border-2 rounded-[1.5rem] font-bold w-full focus:bg-white focus:border-slate-900 transition-all outline-none" placeholder="ระบุสิ่งที่ต้องทำ..." value={formData.detail} onChange={e => setFormData({ ...formData, detail: e.target.value })} />
+                            <label className="text-xs font-black uppercase opacity-50 ml-2 tracking-wider">รายละเอียดงาน</label>
+                            <textarea rows={3} className="p-5 bg-slate-50 border-2 rounded-[1.5rem] font-bold w-full focus:bg-white focus:border-slate-900 transition-all outline-none" placeholder="ระบุสิ่งที่ต้องทำ..." value={formData.detail} onChange={e => setFormData({ ...formData, detail: e.target.value })} />
                         </div>
 
                         <button type="submit" disabled={submitting} className={`w-full py-5 rounded-[2rem] font-black text-xl flex items-center justify-center gap-3 shadow-lg transition-all ${editingId ? 'bg-orange-500 hover:bg-orange-600' : 'bg-slate-900 hover:bg-slate-800'} text-white active:scale-[0.98]`}>
@@ -577,7 +577,7 @@ export default function HomePage() {
                         <div className="p-8 md:p-10">
                             <div className="flex justify-between items-start mb-8">
                                 <div className="flex flex-col gap-2">
-                                    <h3 className="text-2xl font-black text-slate-800 leading-tight">รายละเอียดภารกิจ</h3>
+                                    <h3 className="text-2xl font-black text-slate-800 leading-tight">รายละเอียดงาน</h3>
                                     <div className="flex flex-wrap gap-2">
                                         {selectedWork.worker_role ? (
                                             selectedWork.worker_role.split(", ").map(role => (
@@ -651,7 +651,7 @@ export default function HomePage() {
                                 </div>
 
                                 <div className="p-8 rounded-[2rem] bg-slate-900 text-white font-bold shadow-xl shadow-slate-200">
-                                    <p className="text-[10px] opacity-50 uppercase mb-3 font-black tracking-widest">รายละเอียดภารกิจ</p>
+                                    <p className="text-[10px] opacity-50 uppercase mb-3 font-black tracking-widest">รายละเอียดงาน</p>
                                     <p className="text-lg leading-relaxed">{selectedWork.detail || "ไม่มีรายละเอียดเพิ่มเติม"}</p>
                                 </div>
                             </div>
@@ -669,6 +669,6 @@ export default function HomePage() {
                     </div>
                 </div>
             )}
-        </main>
+        </MainLayout>
     );
 }

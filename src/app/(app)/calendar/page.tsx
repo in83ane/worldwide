@@ -427,14 +427,14 @@ export default function WorkCalendar() {
             <style dangerouslySetInnerHTML={{ __html: customStyles }} />
             <div className="max-w-[1600px] mx-auto space-y-6">
                 <header className="bg-white p-4 md:p-5 rounded-[2rem] shadow-sm border border-slate-100">
-                    {/* row 1: logo + title */}
-                    <div className="flex items-center justify-between mb-3">
+                    {/* ── Mobile header (< md) : 2 rows ── */}
+                    <div className="flex md:hidden items-center justify-between mb-3">
                         <div className="flex items-center gap-3">
-                            <div className="p-2.5 md:p-3 bg-slate-950 rounded-2xl text-white shadow-lg shadow-slate-200">
+                            <div className="p-2.5 bg-slate-950 rounded-2xl text-white shadow-lg shadow-slate-200">
                                 <CalendarDays size={20} />
                             </div>
                             <div>
-                                <h1 className="text-base md:text-xl font-bold text-slate-800 tracking-tight">ระบบปฏิทินตารางงาน</h1>
+                                <h1 className="text-base font-bold text-slate-800 tracking-tight">ระบบปฏิทินตารางงาน</h1>
                                 <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Management system</p>
                             </div>
                         </div>
@@ -445,21 +445,50 @@ export default function WorkCalendar() {
                             </button>
                         )}
                     </div>
-                    {/* row 2: date nav */}
-                    <div className="flex items-center gap-2">
+                    <div className="flex md:hidden items-center gap-2">
                         <div className="flex flex-1 items-center bg-slate-50 p-1.5 rounded-2xl border border-slate-100 gap-1">
-                            <button onClick={handlePrev} className="p-2 hover:bg-white rounded-xl text-slate-400 hover:text-slate-900 active:scale-95 transition-all"><ChevronLeft size={16} /></button>
-                            <span className="flex-1 text-center font-bold text-xs md:text-sm text-slate-700">
+                            <button onClick={handlePrev} className="p-2 rounded-xl text-slate-400 active:scale-95 transition-all"><ChevronLeft size={16} /></button>
+                            <span className="flex-1 text-center font-bold text-xs text-slate-700">
                                 {currentView === 'calendar'
                                     ? currentDate.toLocaleDateString('th-TH', { month: 'long', year: 'numeric' })
                                     : selectedDate?.toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })}
                             </span>
-                            <button onClick={handleNext} className="p-2 hover:bg-white rounded-xl text-slate-400 hover:text-slate-900 active:scale-95 transition-all"><ChevronRight size={16} /></button>
+                            <button onClick={handleNext} className="p-2 rounded-xl text-slate-400 active:scale-95 transition-all"><ChevronRight size={16} /></button>
                         </div>
                         <button onClick={() => { const d = new Date(); setCurrentDate(d); setSelectedDate(d); }}
                             className="bg-white text-slate-950 px-3 py-2 rounded-xl font-bold text-xs shadow-sm border border-slate-100 whitespace-nowrap">
                             วันนี้
                         </button>
+                    </div>
+
+                    {/* ── Desktop header (≥ md) : original single row ── */}
+                    <div className="hidden md:flex justify-between items-center gap-4">
+                        <div className="flex items-center gap-4">
+                            <div className="p-3 bg-slate-950 rounded-2xl text-white shadow-lg shadow-slate-200">
+                                <CalendarDays size={24} />
+                            </div>
+                            <div>
+                                <h1 className="text-xl font-bold text-slate-800 tracking-tight">ระบบปฏิทินตารางงาน</h1>
+                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Management system</p>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <div className="flex items-center bg-slate-50 p-1.5 rounded-2xl border border-slate-100 gap-2">
+                                <div className="flex items-center border-r border-slate-200 pr-2 gap-1">
+                                    <button onClick={handlePrev} className="p-2 hover:bg-white rounded-xl text-slate-400 hover:text-slate-900"><ChevronLeft size={18} /></button>
+                                    <span className="font-bold min-w-[150px] text-center text-sm text-slate-700 uppercase tracking-wide">
+                                        {currentView === 'calendar'
+                                            ? currentDate.toLocaleDateString('th-TH', { month: 'long', year: 'numeric' })
+                                            : selectedDate?.toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })}
+                                    </span>
+                                    <button onClick={handleNext} className="p-2 hover:bg-white rounded-xl text-slate-400 hover:text-slate-900"><ChevronRight size={18} /></button>
+                                </div>
+                                <button onClick={() => { const d = new Date(); setCurrentDate(d); setSelectedDate(d); }} className="bg-white text-slate-950 px-4 py-2 rounded-xl font-bold text-xs shadow-sm border border-slate-100 hover:bg-slate-50">วันนี้</button>
+                            </div>
+                            {currentView === 'daily' && (
+                                <button onClick={() => switchView('calendar')} className="bg-slate-900 text-white px-6 py-3 rounded-2xl font-bold text-xs shadow-md uppercase tracking-wider">กลับไปหน้าปฏิทิน</button>
+                            )}
+                        </div>
                     </div>
                 </header>
 

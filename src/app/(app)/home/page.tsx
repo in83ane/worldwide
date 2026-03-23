@@ -575,7 +575,7 @@ export default function HomePage() {
             {/* ── Work Detail Modal ── */}
             {showWorkModal && selectedWork && (
                 <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[200] flex items-end md:items-center justify-center p-0 md:p-4" onClick={() => setShowWorkModal(false)}>
-                    <div className="bg-white rounded-t-[2rem] md:rounded-[2.5rem] w-full max-w-lg shadow-2xl relative overflow-hidden animate-in slide-in-from-bottom md:zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+                    <div className="bg-white rounded-t-[2rem] md:rounded-[2.5rem] w-full md:max-w-lg shadow-2xl relative overflow-hidden md:animate-in md:zoom-in-95 md:duration-200" onClick={e => e.stopPropagation()}>
                         <div 
                             className="h-2.5 w-full" 
                             style={{ 
@@ -584,7 +584,7 @@ export default function HomePage() {
                                     : (deptColorMap[selectedWork.worker_role?.split(", ")[0] || ""] || '#94a3b8')
                             }} 
                         />
-                        {/* drag handle for mobile */}
+                        {/* drag handle - mobile only */}
                         <div className="flex justify-center pt-2 md:hidden">
                             <div className="w-10 h-1 bg-slate-200 rounded-full" />
                         </div>

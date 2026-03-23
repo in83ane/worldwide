@@ -237,11 +237,13 @@ export default function WorkCalendar() {
         const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
         const offset = firstDay === 0 ? 6 : firstDay - 1;
         const days = [];
-        for (let i = 0; i < offset; i++) days.push(<div key={`empty-${i}`} className="h-36 bg-slate-50/20 border-r border-b border-slate-100" />);
+        for (let i = 0; i < offset; i++) days.push(<div key={`empty-${i}`} className="h-16 md:h-36 bg-slate-50/20 border-r border-b border-slate-100" />);
         for (let date = 1; date <= daysInMonth; date++) {
             const dateObj = new Date(currentDate.getFullYear(), currentDate.getMonth(), date);
             const isToday = now.toDateString() === dateObj.toDateString();
             const dayWorks = workSchedules.filter(w => w.startDate.toDateString() === dateObj.toDateString() && w.status !== 'complete');
+            const hasOverdue = dayWorks.some(w => w.status === 'pending' && w.startTime < now);
+            const hasInProgress = dayWorks.some(w => w.status === 'inprogress');
 
             const uniqueJobs: Record<string, WorkSchedule[]> = {};
             dayWorks.forEach(work => {
@@ -251,31 +253,50 @@ export default function WorkCalendar() {
             });
 
             days.push(
-                <div key={date} className="h-20 md:h-36 border-r border-b border-slate-100 p-1 md:p-2 bg-white active:bg-slate-50 transition-all cursor-pointer overflow-hidden"
+                <div key={date}
+                    className="h-16 md:h-36 border-r border-b border-slate-100 bg-white active:bg-slate-50 md:hover:bg-slate-50 transition-all cursor-pointer overflow-hidden"
                     onClick={() => { setSelectedDate(dateObj); switchView('daily'); }}>
-                    <div className="flex justify-between items-start mb-1">
-                        <div className={`w-7 h-7 flex items-center justify-center rounded-xl text-[11px] font-bold ${isToday ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'text-slate-400'}`}>{date}</div>
+
+                    {/* ── Mobile cell ── */}
+                    <div className="md:hidden h-full flex flex-col items-center justify-center gap-1 p-1">
+                        <div className={`w-7 h-7 flex items-center justify-center rounded-xl text-[11px] font-bold
+                            ${isToday ? 'bg-blue-600 text-white shadow-md shadow-blue-200' : 'text-slate-500'}`}>
+                            {date}
+                        </div>
                         {dayWorks.length > 0 && (
-                            <span className="text-[9px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-lg border border-blue-100">
-                                {dayWorks.length} {dayWorks.length === 1 ? 'job' : 'jobs'}
+                            <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-lg leading-none
+                                ${hasOverdue ? 'bg-red-100 text-red-600' : hasInProgress ? 'bg-yellow-100 text-yellow-700' : 'bg-blue-50 text-blue-600'}`}>
+                                {dayWorks.length}
                             </span>
                         )}
                     </div>
-                    <div className="space-y-1 overflow-y-auto max-h-[90px] pr-1 main-timeline-scroll">
-                        {Object.values(uniqueJobs).sort((a, b) => a[0].work_time.localeCompare(b[0].work_time)).map((group, idx) => {
-                            const job = group[0];
-                            const isOverdue = job.status === 'pending' && job.startTime < now;
-                            const isInProgress = job.status === 'inprogress';
-                            const animClass = isOverdue ? 'animate-overdue' : isInProgress ? 'animate-inprogress' : '';
-                            return (
-                                <div key={idx} onClick={(e) => handleEventClick(e, group)}
-                                    style={{ '--dept-color': job.deptColor, backgroundColor: animClass ? undefined : job.deptColor, color: 'white' } as React.CSSProperties}
-                                    className={`w-full text-left p-1 rounded-md text-[10px] mb-1 calendar-event-card font-medium ${animClass}`}>
-                                    <div className="flex justify-between opacity-90 border-b border-white/20 mb-0.5"><span>{job.work_time.substring(0, 5)}</span></div>
-                                    <span className="truncate block leading-tight">{group.map(w => cleanWorkerName(w.worker)).join(', ')}</span>
-                                </div>
-                            );
-                        })}
+
+                    {/* ── Desktop cell ── */}
+                    <div className="hidden md:block p-2">
+                        <div className="flex justify-between items-start mb-1">
+                            <div className={`w-7 h-7 flex items-center justify-center rounded-xl text-[11px] font-bold ${isToday ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'text-slate-400'}`}>{date}</div>
+                            {dayWorks.length > 0 && (
+                                <span className="text-[9px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-lg border border-blue-100">
+                                    {dayWorks.length} {dayWorks.length === 1 ? 'job' : 'jobs'}
+                                </span>
+                            )}
+                        </div>
+                        <div className="space-y-1 overflow-y-auto max-h-[90px] pr-1 main-timeline-scroll">
+                            {Object.values(uniqueJobs).sort((a, b) => a[0].work_time.localeCompare(b[0].work_time)).map((group, idx) => {
+                                const job = group[0];
+                                const isOverdue = job.status === 'pending' && job.startTime < now;
+                                const isInProgress = job.status === 'inprogress';
+                                const animClass = isOverdue ? 'animate-overdue' : isInProgress ? 'animate-inprogress' : '';
+                                return (
+                                    <div key={idx} onClick={(e) => handleEventClick(e, group)}
+                                        style={{ '--dept-color': job.deptColor, backgroundColor: animClass ? undefined : job.deptColor, color: 'white' } as React.CSSProperties}
+                                        className={`w-full text-left p-1 rounded-md text-[10px] mb-1 calendar-event-card font-medium ${animClass}`}>
+                                        <div className="flex justify-between opacity-90 border-b border-white/20 mb-0.5"><span>{job.work_time.substring(0, 5)}</span></div>
+                                        <span className="truncate block leading-tight">{group.map(w => cleanWorkerName(w.worker)).join(', ')}</span>
+                                    </div>
+                                );
+                            })}
+                        </div>
                     </div>
                 </div>
             );
@@ -551,16 +572,20 @@ export default function WorkCalendar() {
                 const mainColor = roleColors[0] || '#94a3b8';
 
                 return (
-                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-4" onClick={() => setShowWorkModal(false)}>
-                    <div className="bg-white rounded-[2.5rem] w-full max-w-lg shadow-2xl relative overflow-hidden" onClick={e => e.stopPropagation()}>
-                        {/* gradient bar เหมือน home */}
-                        <div className="h-3 w-full" style={barStyle} />
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-end md:items-center justify-center p-0 md:p-4" onClick={() => setShowWorkModal(false)}>
+                    <div className="bg-white rounded-t-[2rem] md:rounded-[2.5rem] w-full md:max-w-lg shadow-2xl relative overflow-hidden md:animate-in md:zoom-in-95 md:duration-200" onClick={e => e.stopPropagation()}>
+                        {/* gradient bar */}
+                        <div className="h-2.5 w-full" style={barStyle} />
+
+                        {/* drag handle - mobile only */}
+                        <div className="flex justify-center pt-2 md:hidden">
+                            <div className="w-10 h-1 bg-slate-200 rounded-full" />
+                        </div>
 
                         <div className="p-5 md:p-10">
                             <div className="flex justify-between items-start mb-5 md:mb-8">
                                 <div className="flex flex-col gap-2">
-                                    <h3 className="text-2xl font-black text-slate-800 leading-tight">รายละเอียดงาน</h3>
-                                    {/* role badges ผสมสีตามแผนก */}
+                                    <h3 className="text-lg md:text-2xl font-black text-slate-800 leading-tight">รายละเอียดงาน</h3>
                                     <div className="flex flex-wrap gap-2">
                                         {roles.length > 0 ? roles.map((role, i) => (
                                             <span key={role} className="px-3 py-1 rounded-lg text-[10px] font-black uppercase text-white shadow-sm"
@@ -572,41 +597,41 @@ export default function WorkCalendar() {
                                         )}
                                     </div>
                                 </div>
-                                <button onClick={() => setShowWorkModal(false)} className="p-3 bg-slate-50 rounded-2xl text-slate-400 hover:bg-slate-100 transition-colors"><X size={20} /></button>
+                                <button onClick={() => setShowWorkModal(false)} className="p-2.5 bg-slate-50 rounded-xl md:rounded-2xl text-slate-400 hover:bg-slate-100 transition-colors"><X size={18} /></button>
                             </div>
 
-                            <div className="space-y-4">
-                                <div className="grid grid-cols-2 gap-4 text-sm font-bold">
-                                    <div className="p-5 bg-slate-50 rounded-2xl border border-slate-100">
-                                        <p className="text-[10px] text-slate-400 uppercase mb-2 font-black tracking-wider">หน่วยงาน</p>
-                                        <div className="flex items-center gap-2 text-slate-700"><Building2 size={16} className="text-blue-500" />{selectedWork.department}</div>
+                            <div className="space-y-3 md:space-y-4">
+                                <div className="grid grid-cols-2 gap-3 md:gap-4 text-sm font-bold">
+                                    <div className="p-4 bg-slate-50 rounded-xl md:rounded-2xl border border-slate-100">
+                                        <p className="text-[10px] text-slate-400 uppercase mb-1.5 font-black tracking-wider">หน่วยงาน</p>
+                                        <div className="flex items-center gap-2 text-slate-700"><Building2 size={15} className="text-blue-500 shrink-0" /><span className="truncate">{selectedWork.department}</span></div>
                                     </div>
-                                    <div className="p-5 bg-slate-50 rounded-2xl border border-slate-100">
-                                        <p className="text-[10px] text-slate-400 uppercase mb-2 font-black tracking-wider">เวลานัดหมาย</p>
-                                        <div className="flex items-center gap-2 text-slate-700"><Clock size={16} className="text-blue-500" />{selectedWork.work_time} น.</div>
+                                    <div className="p-4 bg-slate-50 rounded-xl md:rounded-2xl border border-slate-100">
+                                        <p className="text-[10px] text-slate-400 uppercase mb-1.5 font-black tracking-wider">เวลานัดหมาย</p>
+                                        <div className="flex items-center gap-2 text-slate-700"><Clock size={15} className="text-blue-500" />{selectedWork.work_time} น.</div>
                                     </div>
                                 </div>
-                                <div className="p-5 md:p-8 rounded-[2rem] bg-slate-900 text-white font-bold shadow-xl">
-                                    <p className="text-[10px] opacity-50 uppercase mb-3 font-black tracking-widest">รายละเอียดงาน</p>
-                                    <p className="text-lg leading-relaxed">{selectedWork.detail || "ไม่มีรายละเอียดเพิ่มเติม"}</p>
+                                <div className="p-5 rounded-[1.5rem] md:rounded-[2rem] bg-slate-900 text-white font-bold shadow-xl">
+                                    <p className="text-[10px] opacity-50 uppercase mb-2 font-black tracking-widest">รายละเอียดงาน</p>
+                                    <p className="text-base md:text-lg leading-relaxed">{selectedWork.detail || "ไม่มีรายละเอียดเพิ่มเติม"}</p>
                                 </div>
                             </div>
 
-                            <div className="flex gap-3 mt-6 md:mt-10">
+                            <div className="flex gap-3 mt-5 md:mt-10">
                                 {selectedWork.status === 'pending' && (
                                     <button onClick={() => updateWorkStatus(selectedJobGroup.map(w => w.id), 'inprogress')}
-                                        className="flex-[2] py-4 rounded-2xl text-white font-black text-sm shadow-lg active:scale-95 transition-all"
+                                        className="flex-[2] py-3.5 md:py-4 rounded-xl md:rounded-2xl text-white font-black text-sm shadow-lg active:scale-95 transition-all"
                                         style={{ backgroundColor: mainColor }}>
                                         เริ่มดำเนินงาน
                                     </button>
                                 )}
                                 {selectedWork.status === 'inprogress' && (
                                     <button onClick={() => updateWorkStatus(selectedJobGroup.map(w => w.id), 'complete')}
-                                        className="flex-[2] bg-emerald-600 py-4 rounded-2xl text-white font-black text-sm shadow-lg hover:bg-emerald-700 active:scale-95 transition-all">
+                                        className="flex-[2] bg-emerald-600 py-3.5 md:py-4 rounded-xl md:rounded-2xl text-white font-black text-sm shadow-lg hover:bg-emerald-700 active:scale-95 transition-all">
                                         เสร็จสิ้นภารกิจ
                                     </button>
                                 )}
-                                <button onClick={() => setShowWorkModal(false)} className="flex-1 py-4 bg-slate-100 rounded-2xl font-black text-sm text-slate-500 hover:bg-slate-200 transition-colors active:scale-95">ย้อนกลับ</button>
+                                <button onClick={() => setShowWorkModal(false)} className="flex-1 py-3.5 md:py-4 bg-slate-100 rounded-xl md:rounded-2xl font-black text-sm text-slate-500 hover:bg-slate-200 transition-colors active:scale-95">ย้อนกลับ</button>
                             </div>
                         </div>
                     </div>

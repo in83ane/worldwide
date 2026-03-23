@@ -287,97 +287,179 @@ export default function WorkCalendar() {
         if (!selectedDate) return null;
         const hours = Array.from({ length: 13 }, (_, i) => i + 8);
         const dayWorks = workSchedules.filter(w => w.startDate.toDateString() === selectedDate.toDateString() && w.status !== 'complete');
+        const dayHistory = workSchedules.filter(w => w.startDate.toDateString() === selectedDate.toDateString() && w.status === 'complete');
         const workers = Array.from(new Set(dayWorks.map(w => w.worker)));
         const hourWidth = 280;
-        if (workers.length === 0) return (
-            <div className="bg-white border rounded-[2rem] p-24 text-center">
-                <Inbox size={48} className="text-slate-200 mx-auto mb-4" />
-                <h3 className="text-xl font-bold text-slate-300">ไม่มีรายการงานค้าง</h3>
-                <button onClick={() => switchView('calendar')} className="mt-6 bg-blue-600 text-white px-8 py-3 rounded-xl font-bold text-sm">กลับหน้าปฏิทิน</button>
+
+        const emptyState = (
+            <div className="bg-white border border-slate-100 rounded-[2rem] p-12 text-center">
+                <Inbox size={40} className="text-slate-200 mx-auto mb-3" />
+                <h3 className="text-base font-bold text-slate-300">ไม่มีรายการงานค้าง</h3>
             </div>
         );
-        return (
-            <div className="bg-white border border-slate-100 rounded-[2rem] shadow-sm overflow-hidden">
-                <div className="overflow-x-auto main-timeline-scroll">
-                    <div style={{ width: `${(hours.length * hourWidth) + 260}px` }} className="relative">
-                        <div className="flex bg-slate-50 border-b sticky top-0 z-30">
-                            <div className="w-[140px] md:w-[260px] p-3 md:p-5 font-bold text-slate-400 text-center border-r text-[10px] uppercase tracking-widest bg-slate-50">ช่าง</div>
-                            {hours.map(h => <div key={h} style={{ width: hourWidth }} className="p-3 md:p-5 text-center font-bold text-slate-500 border-r text-xs md:text-sm">{h}:00</div>)}
-                        </div>
-                        <div className="divide-y divide-slate-100">
-                            {workers.map(worker => {
-                                const works = dayWorks.filter(w => w.worker === worker);
-                                return (
-                                    <div key={worker} className="flex min-h-[120px] md:min-h-[150px] relative">
-                                        <div className="w-[140px] md:w-[260px] sticky left-0 z-20 bg-white border-r flex shadow-lg shadow-slate-900/5 overflow-hidden">
-                                            <div className="w-2 shrink-0 h-full" style={{ backgroundColor: works[0].deptColor }}></div>
-                                            <div className="flex flex-col justify-center px-3 md:px-6">
-                                                <span className="font-bold text-slate-800 text-sm md:text-lg leading-tight mb-1">{cleanWorkerName(worker)}</span>
-                                                <span className="text-[11px] md:text-[13px] font-semibold uppercase tracking-wide" style={{ color: works[0].deptColor }}>{works[0].worker_role || "DEPT"}</span>
-                                            </div>
+
+        // ─── Mobile: vertical card list ────────────────────────────────
+        const mobileView = (
+            <div className="xl:hidden space-y-3">
+                {/* pending/inprogress jobs */}
+                {dayWorks.length === 0 ? emptyState : (
+                    dayWorks
+                        .sort((a, b) => a.work_time.localeCompare(b.work_time))
+                        .map((work) => {
+                            const isOverdue = work.status === 'pending' && work.startTime < now;
+                            const isInProgress = work.status === 'inprogress';
+                            const animClass = isOverdue ? 'animate-overdue' : isInProgress ? 'animate-inprogress' : '';
+                            return (
+                                <div key={work.id}
+                                    onClick={() => { setSelectedWork(work); setSelectedJobGroup([work]); setShowWorkModal(true); }}
+                                    style={{ '--dept-color': work.deptColor, backgroundColor: animClass ? undefined : work.deptColor } as React.CSSProperties}
+                                    className={`w-full rounded-[1.5rem] p-4 text-white shadow-md active:scale-95 transition-all cursor-pointer ${animClass}`}>
+                                    <div className="flex justify-between items-start mb-2">
+                                        <div className="flex items-center gap-1.5 bg-black/15 px-2.5 py-1 rounded-xl text-xs font-bold">
+                                            <Clock size={12} /> {work.work_time.substring(0, 5)} น.
                                         </div>
-                                        <div className="flex-grow relative bg-slate-50/10">
-                                            {hours.map(h => <div key={h} style={{ left: (h - 8) * hourWidth, width: 1 }} className="absolute top-0 bottom-0 bg-slate-200/40" />)}
-                                            {works.map((work) => {
-                                                const leftPos = ((work.startTime.getHours() - 8) * hourWidth) + (work.startTime.getMinutes() / 60 * hourWidth);
-                                                const isOverdue = work.status === 'pending' && work.startTime < now;
-                                                const isInProgress = work.status === 'inprogress';
-                                                const animClass = isOverdue ? 'animate-overdue' : isInProgress ? 'animate-inprogress' : '';
-                                                return (
-                                                    <div key={work.id} onClick={() => { setSelectedWork(work); setSelectedJobGroup([work]); setShowWorkModal(true); }}
-                                                        style={{
-                                                            left: leftPos + 20, width: 250, top: 25, position: 'absolute',
-                                                            '--dept-color': work.deptColor,
-                                                            backgroundColor: animClass ? undefined : work.deptColor, color: 'white'
-                                                        } as React.CSSProperties}
-                                                        className={`p-4 rounded-2xl shadow-lg flex flex-col gap-1.5 min-h-[100px] z-10 calendar-event-card ${animClass}`}
-                                                    >
-                                                        <div className="flex justify-between items-center mb-1">
-                                                            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-black/15 text-[11px] font-bold"><Clock size={12} /> {work.work_time.substring(0, 5)}</div>
-                                                            <span className="text-[9px] font-bold uppercase opacity-80 tracking-tighter">{work.status}</span>
-                                                        </div>
-                                                        <div className="flex items-center gap-1.5 font-bold text-[15px] opacity-100"><Building2 size={14} /><span className="truncate">{work.department}</span></div>
-                                                        <p className="font-medium text-[14px] leading-snug line-clamp-2 opacity-95">{work.detail}</p>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
+                                        <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-lg ${isInProgress ? 'bg-yellow-400/30' : isOverdue ? 'bg-red-400/30' : 'bg-black/15'}`}>
+                                            {isInProgress ? 'กำลังทำ' : isOverdue ? 'เกินกำหนด' : 'รอดำเนิน'}
+                                        </span>
                                     </div>
-                                );
-                            })}
+                                    <p className="font-black text-base leading-tight mb-1">{cleanWorkerName(work.worker)}</p>
+                                    <div className="flex items-center gap-1.5 text-xs font-semibold opacity-80 mb-2">
+                                        <Building2 size={12} /> {work.department}
+                                    </div>
+                                    <p className="text-sm opacity-90 leading-snug line-clamp-2">{work.detail}</p>
+                                </div>
+                            );
+                        })
+                )}
+
+                {/* history for this day */}
+                {dayHistory.length > 0 && (
+                    <div className="mt-2">
+                        <div className="flex items-center gap-2 px-1 mb-3">
+                            <div className="w-1.5 h-4 bg-emerald-500 rounded-full" />
+                            <span className="font-bold text-sm text-slate-700">งานที่เสร็จแล้ววันนี้ ({dayHistory.length})</span>
+                        </div>
+                        <div className="space-y-2">
+                            {dayHistory.map((work, idx) => (
+                                <div key={idx}
+                                    onClick={() => { setSelectedWork(work); setSelectedJobGroup([work]); setShowWorkModal(true); }}
+                                    style={{ borderLeftColor: work.deptColor }}
+                                    className="bg-white rounded-[1.5rem] border-l-4 p-4 shadow-sm cursor-pointer active:scale-95 transition-all">
+                                    <div className="flex justify-between items-center mb-1">
+                                        <div className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-lg">
+                                            <CheckCircle2 size={10} /> เสร็จแล้ว
+                                        </div>
+                                        <span className="text-[9px] font-bold text-slate-400">{work.work_time.substring(0, 5)} น.</span>
+                                    </div>
+                                    <p className="font-bold text-slate-800 text-sm">{cleanWorkerName(work.worker)}</p>
+                                    <div className="flex items-center gap-1.5 mt-0.5 text-[11px] font-bold text-slate-400">
+                                        <Building2 size={11} /> {work.department}
+                                    </div>
+                                    <p className="text-[11px] text-slate-400 line-clamp-1 mt-1">{work.detail}</p>
+                                </div>
+                            ))}
                         </div>
                     </div>
-                </div>
+                )}
             </div>
         );
+
+        // ─── Desktop: horizontal timeline (เดิม) ──────────────────────
+        const desktopView = (
+            <div className="hidden xl:block">
+                {workers.length === 0 ? emptyState : (
+                    <div className="bg-white border border-slate-100 rounded-[2rem] shadow-sm overflow-hidden">
+                        <div className="overflow-x-auto main-timeline-scroll">
+                            <div style={{ width: `${(hours.length * hourWidth) + 260}px` }} className="relative">
+                                <div className="flex bg-slate-50 border-b sticky top-0 z-30">
+                                    <div className="w-[260px] p-5 font-bold text-slate-400 text-center border-r text-[11px] uppercase tracking-widest bg-slate-50">Technician Info</div>
+                                    {hours.map(h => <div key={h} style={{ width: hourWidth }} className="p-5 text-center font-bold text-slate-500 border-r text-sm">{h}:00</div>)}
+                                </div>
+                                <div className="divide-y divide-slate-100">
+                                    {workers.map(worker => {
+                                        const works = dayWorks.filter(w => w.worker === worker);
+                                        return (
+                                            <div key={worker} className="flex min-h-[150px] relative">
+                                                <div className="w-[260px] sticky left-0 z-20 bg-white border-r flex shadow-lg shadow-slate-900/5 overflow-hidden">
+                                                    <div className="w-2 shrink-0 h-full" style={{ backgroundColor: works[0].deptColor }}></div>
+                                                    <div className="flex flex-col justify-center px-6">
+                                                        <span className="font-bold text-slate-800 text-lg leading-tight mb-1">{cleanWorkerName(worker)}</span>
+                                                        <span className="text-[13px] font-semibold uppercase tracking-wide" style={{ color: works[0].deptColor }}>{works[0].worker_role || "DEPARTMENT"}</span>
+                                                    </div>
+                                                </div>
+                                                <div className="flex-grow relative bg-slate-50/10">
+                                                    {hours.map(h => <div key={h} style={{ left: (h - 8) * hourWidth, width: 1 }} className="absolute top-0 bottom-0 bg-slate-200/40" />)}
+                                                    {works.map((work) => {
+                                                        const leftPos = ((work.startTime.getHours() - 8) * hourWidth) + (work.startTime.getMinutes() / 60 * hourWidth);
+                                                        const isOverdue = work.status === 'pending' && work.startTime < now;
+                                                        const isInProgress = work.status === 'inprogress';
+                                                        const animClass = isOverdue ? 'animate-overdue' : isInProgress ? 'animate-inprogress' : '';
+                                                        return (
+                                                            <div key={work.id} onClick={() => { setSelectedWork(work); setSelectedJobGroup([work]); setShowWorkModal(true); }}
+                                                                style={{ left: leftPos + 20, width: 250, top: 25, position: 'absolute', '--dept-color': work.deptColor, backgroundColor: animClass ? undefined : work.deptColor, color: 'white' } as React.CSSProperties}
+                                                                className={`p-4 rounded-2xl shadow-lg flex flex-col gap-1.5 min-h-[100px] z-10 calendar-event-card ${animClass}`}>
+                                                                <div className="flex justify-between items-center mb-1">
+                                                                    <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-black/15 text-[11px] font-bold"><Clock size={12} /> {work.work_time.substring(0, 5)}</div>
+                                                                    <span className="text-[9px] font-bold uppercase opacity-80 tracking-tighter">{work.status}</span>
+                                                                </div>
+                                                                <div className="flex items-center gap-1.5 font-bold text-[15px] opacity-100"><Building2 size={14} /><span className="truncate">{work.department}</span></div>
+                                                                <p className="font-medium text-[14px] leading-snug line-clamp-2 opacity-95">{work.detail}</p>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+
+        return <>{mobileView}{desktopView}</>;
     };
 
     return (
         <div className="thai-font-container min-h-screen bg-[#f8fafc] p-4 md:p-6 text-slate-700">
             <style dangerouslySetInnerHTML={{ __html: customStyles }} />
             <div className="max-w-[1600px] mx-auto space-y-6">
-                <header className="flex flex-col md:flex-row justify-between items-center bg-white p-5 rounded-[2rem] shadow-sm border border-slate-100 gap-4">
-                    <div className="flex items-center gap-4">
-                        <div className="p-3 bg-slate-950 rounded-2xl text-white shadow-lg shadow-slate-200">
-                            <CalendarDays size={24} />
-                        </div>
-                        <div>
-                            <h1 className="text-xl font-bold text-slate-800 tracking-tight">ระบบปฏิทินตารางงาน</h1>
-                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Management system</p>
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                        <div className="flex items-center bg-slate-50 p-1.5 rounded-2xl border border-slate-100 gap-2">
-                            <div className="flex items-center border-r border-slate-200 pr-2 gap-1">
-                                <button onClick={handlePrev} className="p-2 hover:bg-white rounded-xl text-slate-400 hover:text-slate-900"><ChevronLeft size={18} /></button>
-                                <span className="font-bold min-w-[150px] text-center text-sm text-slate-700 uppercase tracking-wide">
-                                    {currentView === 'calendar' ? currentDate.toLocaleDateString('th-TH', { month: 'long', year: 'numeric' }) : selectedDate?.toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })}
-                                </span>
-                                <button onClick={handleNext} className="p-2 hover:bg-white rounded-xl text-slate-400 hover:text-slate-900"><ChevronRight size={18} /></button>
+                <header className="bg-white p-4 md:p-5 rounded-[2rem] shadow-sm border border-slate-100">
+                    {/* row 1: logo + title */}
+                    <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2.5 md:p-3 bg-slate-950 rounded-2xl text-white shadow-lg shadow-slate-200">
+                                <CalendarDays size={20} />
                             </div>
-                            <button onClick={() => { const d = new Date(); setCurrentDate(d); setSelectedDate(d); }} className="bg-white text-slate-950 px-4 py-2 rounded-xl font-bold text-xs shadow-sm border border-slate-100 hover:bg-slate-50">วันนี้</button>
+                            <div>
+                                <h1 className="text-base md:text-xl font-bold text-slate-800 tracking-tight">ระบบปฏิทินตารางงาน</h1>
+                                <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Management system</p>
+                            </div>
                         </div>
-                        {currentView === 'daily' && <button onClick={() => switchView('calendar')} className="bg-slate-900 text-white px-6 py-3 rounded-2xl font-bold text-xs shadow-md uppercase tracking-wider">กลับไปหน้าปฏิทิน</button>}
+                        {currentView === 'daily' && (
+                            <button onClick={() => switchView('calendar')}
+                                className="flex items-center gap-1.5 bg-slate-900 text-white px-3 py-2 rounded-xl font-bold text-xs shadow-md">
+                                <ChevronLeft size={14} /> ปฏิทิน
+                            </button>
+                        )}
+                    </div>
+                    {/* row 2: date nav */}
+                    <div className="flex items-center gap-2">
+                        <div className="flex flex-1 items-center bg-slate-50 p-1.5 rounded-2xl border border-slate-100 gap-1">
+                            <button onClick={handlePrev} className="p-2 hover:bg-white rounded-xl text-slate-400 hover:text-slate-900 active:scale-95 transition-all"><ChevronLeft size={16} /></button>
+                            <span className="flex-1 text-center font-bold text-xs md:text-sm text-slate-700">
+                                {currentView === 'calendar'
+                                    ? currentDate.toLocaleDateString('th-TH', { month: 'long', year: 'numeric' })
+                                    : selectedDate?.toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })}
+                            </span>
+                            <button onClick={handleNext} className="p-2 hover:bg-white rounded-xl text-slate-400 hover:text-slate-900 active:scale-95 transition-all"><ChevronRight size={16} /></button>
+                        </div>
+                        <button onClick={() => { const d = new Date(); setCurrentDate(d); setSelectedDate(d); }}
+                            className="bg-white text-slate-950 px-3 py-2 rounded-xl font-bold text-xs shadow-sm border border-slate-100 whitespace-nowrap">
+                            วันนี้
+                        </button>
                     </div>
                 </header>
 

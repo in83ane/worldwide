@@ -1,5 +1,5 @@
 "use client";
-import MainLayout from "@/components/MainLayout";
+
 import React, { useMemo, useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -269,26 +269,23 @@ export default function HomePage() {
         setSubmitting(false);
     };
 
-    // ปกติซ่อนงานที่เสร็จแล้ว — แต่ถ้ากำลังค้นหาให้แสดงทั้งหมดรวม complete ด้วย
     const filteredWork = useMemo(() => {
         const lower = searchTerm.toLowerCase();
 
         if (!searchTerm.trim()) {
-            // ไม่ได้ค้นหา → แสดงเฉพาะงานที่ยังไม่เสร็จ
             return [...allWorkData].filter(item => item.status !== 'complete');
         }
 
-        // กำลังค้นหา → แสดงทั้งหมดรวมงานที่เสร็จแล้ว
         return [...allWorkData].filter(item =>
             ((item.department ?? "") + (item.detail ?? "") + (item.worker ?? "") + (item.worker_role ?? ""))
                 .toLowerCase().includes(lower)
         );
     }, [allWorkData, searchTerm]);
 
-    if (loading) return <div className="h-screen flex items-center justify-center font-black text-slate-400 text-2xl animate-pulse">Loading...</div>;
+    if (loading) return <div className="h-screen flex items-center justify-center font-black text-slate-400 text-xl animate-pulse">Loading...</div>;
 
     return (
-        <MainLayout>
+        <main className={`transition-all duration-300 ${isTableZoomed ? 'fixed inset-0 bg-slate-50 z-50 p-3 overflow-y-auto' : 'max-w-[1400px] mx-auto p-3 md:p-8'}`}>
             <style dangerouslySetInnerHTML={{
                 __html: `
                 @keyframes status-glow-red { 0%, 100% { background-color: #ffffff; } 50% { background-color: #fef2f2; } }
@@ -297,68 +294,70 @@ export default function HomePage() {
                 .glow-inprogress { animation: status-glow-orange 2.5s infinite ease-in-out; }
             `}} />
 
-            <header className={`mb-10 flex flex-col md:flex-row justify-between items-center gap-4 ${isTableZoomed ? 'hidden' : ''}`}>
-                <h1 className="text-3xl font-black text-slate-900 flex items-center gap-3">
-                    <div className="p-3 bg-slate-900 rounded-2xl text-white shadow-xl"><Briefcase size={28} /></div>
+            {/* ── Header ── */}
+            <header className={`mb-4 md:mb-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-3 ${isTableZoomed ? 'hidden' : ''}`}>
+                <h1 className="text-lg md:text-3xl font-black text-slate-900 flex items-center gap-2">
+                    <div className="p-2 md:p-3 bg-slate-900 rounded-xl md:rounded-2xl text-white shadow-xl">
+                        <Briefcase size={20} />
+                    </div>
                     ระบบจัดการตารางงาน
                 </h1>
                 
                 {isAdmin && (
-                    <div className="flex flex-wrap gap-2 animate-in fade-in duration-500">
-                        <Link href="/employees" className="bg-white border-2 px-5 py-3 rounded-2xl font-black text-slate-600 hover:text-slate-900 transition-all flex items-center gap-2 shadow-sm">
-                            <Users size={18} /> พนักงาน
+                    <div className="flex flex-wrap gap-2 animate-in fade-in duration-500 w-full md:w-auto">
+                        <Link href="/employees" className="bg-white border-2 px-3 py-2 md:px-5 md:py-3 rounded-xl md:rounded-2xl font-black text-slate-600 hover:text-slate-900 transition-all flex items-center gap-1.5 shadow-sm text-sm">
+                            <Users size={15} /> พนักงาน
                         </Link>
-                        <Link href="/departments" className="bg-white border-2 px-5 py-3 rounded-2xl font-black text-slate-600 hover:text-slate-900 transition-all flex items-center gap-2 shadow-sm">
-                            <Settings size={18} /> แผนก
+                        <Link href="/departments" className="bg-white border-2 px-3 py-2 md:px-5 md:py-3 rounded-xl md:rounded-2xl font-black text-slate-600 hover:text-slate-900 transition-all flex items-center gap-1.5 shadow-sm text-sm">
+                            <Settings size={15} /> แผนก
                         </Link>
-                        <Link href="/price" className="bg-amber-50 border-2 border-amber-200 px-5 py-3 rounded-2xl font-black text-amber-600 hover:bg-amber-600 hover:text-white transition-all flex items-center gap-2 shadow-sm ml-auto">
-                            <CircleDollarSign size={18} /> แก้ไขราคาวัสดุ
+                        <Link href="/price" className="bg-amber-50 border-2 border-amber-200 px-3 py-2 md:px-5 md:py-3 rounded-xl md:rounded-2xl font-black text-amber-600 hover:bg-amber-600 hover:text-white transition-all flex items-center gap-1.5 shadow-sm ml-auto text-sm">
+                            <CircleDollarSign size={15} /> แก้ไขราคาวัสดุ
                         </Link>
                     </div>
                 )}
             </header>
 
+            {/* ── Create / Edit Form ── */}
             {isAdmin && !isTableZoomed && (
-                <section className={`bg-white rounded-[2.5rem] shadow-xl border-4 p-8 mb-12 transition-all animate-in slide-in-from-top-4 ${editingId ? 'border-orange-500 scale-[1.01]' : 'border-white'}`}>
-                    <div className="flex justify-between items-center mb-8">
-                        <h2 className="text-xl font-black flex items-center gap-2">
-                            {editingId ? <Pencil size={24} className="text-orange-500" /> : <PlusIcon size={24} className="text-emerald-500" />}
+                <section className={`bg-white rounded-[1.5rem] md:rounded-[2.5rem] shadow-xl border-4 p-4 md:p-8 mb-5 md:mb-12 transition-all animate-in slide-in-from-top-4 ${editingId ? 'border-orange-500 scale-[1.01]' : 'border-white'}`}>
+                    <div className="flex justify-between items-center mb-4 md:mb-8">
+                        <h2 className="text-base md:text-xl font-black flex items-center gap-2">
+                            {editingId ? <Pencil size={18} className="text-orange-500" /> : <PlusIcon size={18} className="text-emerald-500" />}
                             {editingId ? 'กำลังแก้ไขแผนงาน' : 'สร้างแผนงานใหม่'}
                         </h2>
                         {editingId && (
-                            <button onClick={() => {setEditingId(null); setFormData(initialFormState);}} className="text-sm font-black text-red-500 hover:bg-red-50 px-4 py-2 rounded-xl transition-all flex items-center gap-2">
-                                <Undo2 size={18} /> ยกเลิกการแก้ไข
+                            <button onClick={() => {setEditingId(null); setFormData(initialFormState);}} className="text-xs font-black text-red-500 hover:bg-red-50 px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5">
+                                <Undo2 size={15} /> ยกเลิก
                             </button>
                         )}
                     </div>
                     
-                    <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
-                            <div className="flex flex-col gap-2">
-                                <label className="text-xs font-black uppercase opacity-50 ml-2 tracking-wider">วันที่เริ่ม</label>
-                                <input type="date" required className="h-[60px] px-4 bg-slate-50 border-2 rounded-2xl font-bold outline-none w-full focus:bg-white focus:border-slate-900 transition-all" value={formData.work_date} onChange={e => setFormData({ ...formData, work_date: e.target.value })} />
+                    <form onSubmit={handleSubmit} className="flex flex-col gap-4 md:gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 md:gap-6 items-end">
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-[10px] font-black uppercase opacity-50 ml-2 tracking-wider">วันที่เริ่ม</label>
+                                <input type="date" required className="h-11 md:h-[60px] px-3 md:px-4 bg-slate-50 border-2 rounded-xl md:rounded-2xl font-bold outline-none w-full focus:bg-white focus:border-slate-900 transition-all text-sm" value={formData.work_date} onChange={e => setFormData({ ...formData, work_date: e.target.value })} />
                             </div>
-                            <div className="flex flex-col gap-2">
-                                <label className="text-xs font-black uppercase opacity-50 ml-2 tracking-wider">เวลานัดหมาย</label>
-                                <input type="time" required className="h-[60px] px-4 bg-slate-50 border-2 rounded-2xl font-bold outline-none w-full focus:bg-white focus:border-slate-900 transition-all" value={formData.work_time} onChange={e => setFormData({ ...formData, work_time: e.target.value })} />
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-[10px] font-black uppercase opacity-50 ml-2 tracking-wider">เวลานัดหมาย</label>
+                                <input type="time" required className="h-11 md:h-[60px] px-3 md:px-4 bg-slate-50 border-2 rounded-xl md:rounded-2xl font-bold outline-none w-full focus:bg-white focus:border-slate-900 transition-all text-sm" value={formData.work_time} onChange={e => setFormData({ ...formData, work_time: e.target.value })} />
                             </div>
-                            <div className="md:col-span-2 relative flex flex-col gap-2" ref={deptDropdownRef}>
-                                <label className="text-xs font-black uppercase opacity-50 ml-2 tracking-wider">ประเภทงาน (เลือกหลายแผนก)</label>
-                                <button type="button" onClick={() => setIsDeptOpen(!isDeptOpen)} className="h-[60px] w-full px-4 bg-slate-50 border-2 rounded-2xl font-bold text-left flex justify-between items-center hover:border-slate-400 transition-all">
+                            <div className="md:col-span-2 relative flex flex-col gap-1.5" ref={deptDropdownRef}>
+                                <label className="text-[10px] font-black uppercase opacity-50 ml-2 tracking-wider">ประเภทงาน (เลือกหลายแผนก)</label>
+                                <button type="button" onClick={() => setIsDeptOpen(!isDeptOpen)} className="h-11 md:h-[60px] w-full px-3 md:px-4 bg-slate-50 border-2 rounded-xl md:rounded-2xl font-bold text-left flex justify-between items-center hover:border-slate-400 transition-all text-sm">
                                     <span className="truncate">{formData.worker_role.length > 0 ? formData.worker_role.join(", ") : "คลิกเพื่อเลือกแผนก..."}</span>
-                                    <ChevronDown size={20} className={`transition-transform ${isDeptOpen ? 'rotate-180' : ''}`} />
+                                    <ChevronDown size={18} className={`transition-transform ${isDeptOpen ? 'rotate-180' : ''}`} />
                                 </button>
                                 {isDeptOpen && (
-                                    <div className="absolute z-[110] w-full top-[95px] bg-white shadow-2xl rounded-3xl p-3 border-2 border-slate-100 grid grid-cols-1 gap-1">
+                                    <div className="absolute z-[110] w-full top-[85px] md:top-[95px] bg-white shadow-2xl rounded-2xl md:rounded-3xl p-2 md:p-3 border-2 border-slate-100 grid grid-cols-1 gap-1">
                                         {departments.map(dept => {
                                             const isChecked = formData.worker_role.includes(dept.name);
                                             return (
                                                 <button key={dept.id} type="button" onClick={() => {
                                                     const newRoles = isChecked ? formData.worker_role.filter(r => r !== dept.name) : [...formData.worker_role, dept.name];
-                                                    
                                                     const updatedWorkers: string[] = [];
                                                     const updatedWorkerIds: string[] = [];
-
                                                     formData.selected_worker_ids.forEach((id, index) => {
                                                         const emp = masterEmployees.find(e => e.id === id);
                                                         if (emp && emp.departments && newRoles.includes(emp.departments.name)) {
@@ -366,17 +365,11 @@ export default function HomePage() {
                                                             updatedWorkerIds.push(id);
                                                         }
                                                     });
-
-                                                    setFormData({ 
-                                                        ...formData, 
-                                                        worker_role: newRoles,
-                                                        selected_workers: updatedWorkers,
-                                                        selected_worker_ids: updatedWorkerIds
-                                                    });
-                                                }} className={`flex items-center justify-between p-4 rounded-2xl transition-all ${isChecked ? 'bg-slate-900 text-white' : 'hover:bg-slate-50'}`}>
+                                                    setFormData({ ...formData, worker_role: newRoles, selected_workers: updatedWorkers, selected_worker_ids: updatedWorkerIds });
+                                                }} className={`flex items-center justify-between p-3 rounded-xl md:rounded-2xl transition-all text-sm ${isChecked ? 'bg-slate-900 text-white' : 'hover:bg-slate-50'}`}>
                                                     <span className="font-bold">{dept.name}</span>
-                                                    <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center ${isChecked ? 'bg-emerald-500 border-emerald-500' : 'bg-white border-slate-200'}`}>
-                                                        {isChecked && <Check size={16} className="text-white" />}
+                                                    <div className={`w-5 h-5 rounded-lg border-2 flex items-center justify-center ${isChecked ? 'bg-emerald-500 border-emerald-500' : 'bg-white border-slate-200'}`}>
+                                                        {isChecked && <Check size={13} className="text-white" />}
                                                     </div>
                                                 </button>
                                             );
@@ -386,27 +379,27 @@ export default function HomePage() {
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div className="flex flex-col gap-2">
-                                <label className="text-xs font-black uppercase opacity-50 ml-2 tracking-wider">สถานที่ / หน่วยงาน</label>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-6">
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-[10px] font-black uppercase opacity-50 ml-2 tracking-wider">สถานที่ / หน่วยงาน</label>
                                 <div className="relative" ref={locationInputRef}>
-                                    <MapPin className="absolute left-4 top-[18px] text-slate-400 z-10" size={18} />
-                                    {locationSearching && <Loader2 size={14} className="absolute right-4 top-[20px] text-slate-400 animate-spin z-10" />}
+                                    <MapPin className="absolute left-3 top-[14px] text-slate-400 z-10" size={16} />
+                                    {locationSearching && <Loader2 size={13} className="absolute right-3 top-[16px] text-slate-400 animate-spin z-10" />}
                                     <input
                                         required
-                                        className="h-[60px] pl-12 pr-4 bg-slate-50 border-2 rounded-2xl font-bold w-full focus:bg-white focus:border-slate-900 transition-all outline-none"
+                                        className="h-11 md:h-[60px] pl-9 pr-4 bg-slate-50 border-2 rounded-xl md:rounded-2xl font-bold w-full focus:bg-white focus:border-slate-900 transition-all outline-none text-sm"
                                         placeholder="พิมพ์ชื่อสถานที่..."
                                         value={formData.department}
                                         onChange={e => handleLocationInput(e.target.value)}
                                         onFocus={() => locationSuggestions.length > 0 && setShowLocationSuggestions(true)}
                                     />
                                     {showLocationSuggestions && locationSuggestions.length > 0 && (
-                                        <div className="absolute z-[120] w-full bg-white shadow-2xl rounded-2xl mt-1 border-2 border-slate-100 overflow-hidden">
+                                        <div className="absolute z-[120] w-full bg-white shadow-2xl rounded-xl md:rounded-2xl mt-1 border-2 border-slate-100 overflow-hidden">
                                             {locationSuggestions.map((s, idx) => (
                                                 <button key={idx} type="button"
                                                     onMouseDown={() => handleSelectLocation(s)}
-                                                    className="w-full flex items-start gap-3 px-4 py-3 hover:bg-slate-50 transition-colors text-left border-b border-slate-50 last:border-0">
-                                                    <MapPin size={14} className="text-slate-400 mt-0.5 shrink-0" />
+                                                    className="w-full flex items-start gap-2 px-3 py-2.5 hover:bg-slate-50 transition-colors text-left border-b border-slate-50 last:border-0">
+                                                    <MapPin size={13} className="text-slate-400 mt-0.5 shrink-0" />
                                                     <div className="min-w-0">
                                                         <p className="font-bold text-sm text-slate-800 truncate">{s.name}</p>
                                                         <p className="text-xs text-slate-400 truncate">{s.address}</p>
@@ -418,28 +411,28 @@ export default function HomePage() {
                                 </div>
                             </div>
 
-                            <div className="flex flex-col gap-2 relative">
-                                <label className="text-xs font-black uppercase opacity-50 ml-2 tracking-wider flex justify-between">มอบหมายช่าง <span>(กรองความว่าง + ภาระงาน)</span></label>
-                                <div className="flex flex-wrap items-center gap-2 px-3 bg-slate-50 border-2 rounded-2xl min-h-[60px] border-slate-200 shadow-inner">
+                            <div className="flex flex-col gap-1.5 relative">
+                                <label className="text-[10px] font-black uppercase opacity-50 ml-2 tracking-wider flex justify-between">มอบหมายช่าง <span className="hidden md:inline">(กรองความว่าง + ภาระงาน)</span></label>
+                                <div className="flex flex-wrap items-center gap-1.5 px-3 bg-slate-50 border-2 rounded-xl md:rounded-2xl min-h-[44px] md:min-h-[60px] border-slate-200 shadow-inner">
                                     {formData.selected_workers.map((w, idx) => (
-                                        <span key={(formData.selected_worker_ids ?? [])[idx] ?? w} className="bg-slate-900 text-white px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-2 shadow-sm animate-in zoom-in-95">
-                                            {w} <X size={14} className="cursor-pointer hover:text-red-400" onClick={() => setFormData({ ...formData, selected_workers: formData.selected_workers.filter((_, i) => i !== idx), selected_worker_ids: (formData.selected_worker_ids ?? []).filter((_, i) => i !== idx) })} />
+                                        <span key={(formData.selected_worker_ids ?? [])[idx] ?? w} className="bg-slate-900 text-white px-2.5 py-1 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm animate-in zoom-in-95">
+                                            {w} <X size={12} className="cursor-pointer hover:text-red-400" onClick={() => setFormData({ ...formData, selected_workers: formData.selected_workers.filter((_, i) => i !== idx), selected_worker_ids: (formData.selected_worker_ids ?? []).filter((_, i) => i !== idx) })} />
                                         </span>
                                     ))}
-                                    <input placeholder={formData.worker_role.length > 0 ? "พิมพ์ชื่อช่าง..." : "กรุณาเลือกแผนกก่อน..."} className="flex-grow bg-transparent p-2 font-bold outline-none disabled:cursor-not-allowed" value={formData.current_worker_input} disabled={formData.worker_role.length === 0} onChange={e => setFormData({ ...formData, current_worker_input: e.target.value })} />
+                                    <input placeholder={formData.worker_role.length > 0 ? "พิมพ์ชื่อช่าง..." : "กรุณาเลือกแผนกก่อน..."} className="flex-grow bg-transparent p-1.5 font-bold outline-none disabled:cursor-not-allowed text-sm" value={formData.current_worker_input} disabled={formData.worker_role.length === 0} onChange={e => setFormData({ ...formData, current_worker_input: e.target.value })} />
                                 </div>
                                 {formData.current_worker_input && formData.worker_role.length > 0 && (
-                                    <div className="absolute z-[100] w-full top-full bg-white shadow-2xl rounded-3xl mt-2 max-h-60 overflow-auto border-2 border-slate-100 p-2 animate-in slide-in-from-top-2">
+                                    <div className="absolute z-[100] w-full top-full bg-white shadow-2xl rounded-2xl md:rounded-3xl mt-1 max-h-52 overflow-auto border-2 border-slate-100 p-1.5 animate-in slide-in-from-top-2">
                                         {recommendedWorkers.filter(e => e.name.toLowerCase().includes(formData.current_worker_input.toLowerCase())).map(emp => {
                                             const ids = formData.selected_worker_ids ?? [];
                                             const alreadySelected = ids.includes(emp.id);
                                             return (
-                                            <button key={emp.id} type="button" disabled={emp.hasConflict || alreadySelected} onClick={() => setFormData({ ...formData, selected_workers: [...formData.selected_workers, emp.name], selected_worker_ids: [...ids, emp.id], current_worker_input: '' })} className={`w-full p-4 rounded-2xl flex justify-between items-center ${(emp.hasConflict || alreadySelected) ? 'opacity-50 bg-red-50 cursor-not-allowed' : 'hover:bg-slate-50 transition-all'}`}>
-                                                <div className="flex items-center gap-3">
-                                                    <img src={emp.image_url || getAvatarUrl(emp.name)} className="w-10 h-10 rounded-xl object-cover border-2 border-white shadow-sm" />
-                                                    <div className="text-left"><p className="font-bold text-slate-800">{emp.name}</p><p className="text-[10px] uppercase font-black text-slate-400">{emp.departments?.name}</p></div>
+                                            <button key={emp.id} type="button" disabled={emp.hasConflict || alreadySelected} onClick={() => setFormData({ ...formData, selected_workers: [...formData.selected_workers, emp.name], selected_worker_ids: [...ids, emp.id], current_worker_input: '' })} className={`w-full p-3 rounded-xl md:rounded-2xl flex justify-between items-center ${(emp.hasConflict || alreadySelected) ? 'opacity-50 bg-red-50 cursor-not-allowed' : 'hover:bg-slate-50 transition-all'}`}>
+                                                <div className="flex items-center gap-2.5">
+                                                    <img src={emp.image_url || getAvatarUrl(emp.name)} className="w-9 h-9 rounded-xl object-cover border-2 border-white shadow-sm" />
+                                                    <div className="text-left"><p className="font-bold text-slate-800 text-sm">{emp.name}</p><p className="text-[10px] uppercase font-black text-slate-400">{emp.departments?.name}</p></div>
                                                 </div>
-                                                {alreadySelected ? <span className="text-[10px] font-black text-slate-400 bg-slate-100 px-3 py-1.5 rounded-xl flex items-center gap-1"><Check size={12} /> เลือกแล้ว</span> : emp.hasConflict ? <span className="text-[10px] font-black text-red-500 bg-red-100 px-3 py-1.5 rounded-xl flex items-center gap-1"><AlertTriangle size={12} /> ไม่ว่าง</span> : <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-xl flex items-center gap-1"><TrendingDown size={12} /> งานค้าง: {emp.load}</span>}
+                                                {alreadySelected ? <span className="text-[10px] font-black text-slate-400 bg-slate-100 px-2.5 py-1 rounded-xl flex items-center gap-1"><Check size={11} /> เลือกแล้ว</span> : emp.hasConflict ? <span className="text-[10px] font-black text-red-500 bg-red-100 px-2.5 py-1 rounded-xl flex items-center gap-1"><AlertTriangle size={11} /> ไม่ว่าง</span> : <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-xl flex items-center gap-1"><TrendingDown size={11} /> งานค้าง: {emp.load}</span>}
                                             </button>
                                             );
                                         })}
@@ -448,31 +441,32 @@ export default function HomePage() {
                             </div>
                         </div>
 
-                        <div className="flex flex-col gap-2">
-                            <label className="text-xs font-black uppercase opacity-50 ml-2 tracking-wider">รายละเอียดงาน</label>
-                            <textarea rows={3} className="p-5 bg-slate-50 border-2 rounded-[1.5rem] font-bold w-full focus:bg-white focus:border-slate-900 transition-all outline-none" placeholder="ระบุสิ่งที่ต้องทำ..." value={formData.detail} onChange={e => setFormData({ ...formData, detail: e.target.value })} />
+                        <div className="flex flex-col gap-1.5">
+                            <label className="text-[10px] font-black uppercase opacity-50 ml-2 tracking-wider">รายละเอียดภารกิจ</label>
+                            <textarea rows={3} required className="p-3 md:p-5 bg-slate-50 border-2 rounded-xl md:rounded-[1.5rem] font-bold w-full focus:bg-white focus:border-slate-900 transition-all outline-none text-sm" placeholder="ระบุสิ่งที่ต้องทำ..." value={formData.detail} onChange={e => setFormData({ ...formData, detail: e.target.value })} />
                         </div>
 
-                        <button type="submit" disabled={submitting} className={`w-full py-5 rounded-[2rem] font-black text-xl flex items-center justify-center gap-3 shadow-lg transition-all ${editingId ? 'bg-orange-500 hover:bg-orange-600' : 'bg-slate-900 hover:bg-slate-800'} text-white active:scale-[0.98]`}>
-                            {submitting ? <Loader2 className="animate-spin" /> : editingId ? <CheckCircle2 /> : <Save />}
+                        <button type="submit" disabled={submitting} className={`w-full py-3.5 md:py-5 rounded-[1.5rem] md:rounded-[2rem] font-black text-base md:text-xl flex items-center justify-center gap-2.5 shadow-lg transition-all ${editingId ? 'bg-orange-500 hover:bg-orange-600' : 'bg-slate-900 hover:bg-slate-800'} text-white active:scale-[0.98]`}>
+                            {submitting ? <Loader2 className="animate-spin" size={20} /> : editingId ? <CheckCircle2 size={20} /> : <Save size={20} />}
                             {editingId ? 'ยืนยันการแก้ไขข้อมูล' : 'บันทึกลงตารางปฏิบัติงาน'}
                         </button>
                     </form>
                 </section>
             )}
 
-            <section className="space-y-6">
-                <div className="flex justify-between items-center bg-white p-3 rounded-3xl border-2 shadow-sm">
+            {/* ── Work List ── */}
+            <section className="space-y-4 md:space-y-6">
+                <div className="flex justify-between items-center bg-white p-2 md:p-3 rounded-2xl md:rounded-3xl border-2 shadow-sm">
                     <div className="relative w-full md:w-96">
-                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-                        <input placeholder="ค้นหางาน..." className="w-full pl-12 pr-4 py-3 bg-slate-50 rounded-2xl font-bold outline-none" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={17} />
+                        <input placeholder="ค้นหางาน..." className="w-full pl-10 pr-4 py-2.5 md:py-3 bg-slate-50 rounded-xl md:rounded-2xl font-bold outline-none text-sm" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
                     </div>
-                    <button onClick={() => setIsTableZoomed(!isTableZoomed)} className="ml-4 p-3 bg-white border-2 rounded-2xl hover:bg-slate-900 hover:text-white transition-all">
-                        {isTableZoomed ? <Minimize size={24} /> : <Maximize size={24} />}
+                    <button onClick={() => setIsTableZoomed(!isTableZoomed)} className="ml-3 p-2.5 bg-white border-2 rounded-xl md:rounded-2xl hover:bg-slate-900 hover:text-white transition-all">
+                        {isTableZoomed ? <Minimize size={20} /> : <Maximize size={20} />}
                     </button>
                 </div>
 
-                <div className="grid grid-cols-1 gap-6">
+                <div className="grid grid-cols-1 gap-3 md:gap-6">
                     {filteredWork.map(item => {
                         const roles = item.worker_role?.split(", ") || [];
                         const workBaseColor = deptColorMap[roles[0]] || '#585858';
@@ -482,33 +476,40 @@ export default function HomePage() {
                         const workerList = item.worker ? item.worker.split(", ") : [];
 
                         return (
-                            <div key={item.id} className={`relative bg-white rounded-[2.5rem] shadow-sm border-2 border-slate-50 overflow-hidden flex flex-col md:flex-row items-stretch transition-all hover:shadow-md ${isComplete ? 'opacity-70 grayscale-[0.5]' : ''}`}>
-                                <div className="absolute left-0 top-0 bottom-0 w-2.5 z-10" style={{
+                            <div key={item.id} className={`relative bg-white rounded-[1.5rem] md:rounded-[2.5rem] shadow-sm border-2 border-slate-50 overflow-hidden flex flex-col md:flex-row items-stretch transition-all hover:shadow-md ${isComplete ? 'opacity-70 grayscale-[0.5]' : ''}`}>
+                                {/* Color bar */}
+                                <div className="absolute left-0 top-0 bottom-0 w-2 z-10" style={{
                                     background: roles.length > 1
                                         ? `linear-gradient(to bottom, ${roles.map(r => deptColorMap[r] || '#94a3b8').join(", ")})`
                                         : (deptColorMap[roles[0]] || '#585858')
                                 }} />
-                                <div className="bg-slate-50/50 w-full md:w-56 p-6 flex flex-col items-center justify-center border-r-2 border-slate-50">
-                                    <div className="text-2xl font-black text-slate-800">{formatDisplayDate(item.work_date)}</div>
-                                    <div className="mt-4 font-black text-xl text-slate-800 flex items-center gap-2">
-                                        <Clock size={20} /> {item.work_time} น.
+
+                                {/* Date/time panel */}
+                                <div className="bg-slate-50/50 w-full md:w-44 px-5 py-3 md:p-6 flex flex-row md:flex-col items-center justify-between md:justify-center border-b-2 md:border-b-0 md:border-r-2 border-slate-50 pl-5">
+                                    <div className="text-base md:text-2xl font-black text-slate-800">{formatDisplayDate(item.work_date)}</div>
+                                    <div className="font-black text-sm md:text-xl text-slate-800 flex items-center gap-1.5 md:mt-3">
+                                        <Clock size={16} /> {item.work_time} น.
                                     </div>
                                 </div>
-                                <div className={`flex-grow p-8 flex flex-col justify-center cursor-pointer transition-colors ${isOverdue ? 'glow-overdue' : isInProgress ? 'glow-inprogress' : ''}`}
+
+                                {/* Detail panel */}
+                                <div className={`flex-grow px-4 py-3 md:p-8 flex flex-col justify-center cursor-pointer transition-colors ${isOverdue ? 'glow-overdue' : isInProgress ? 'glow-inprogress' : ''}`}
                                     onClick={() => { setSelectedWork(item); setShowWorkModal(true); }}>
-                                    <div className="flex flex-wrap items-center gap-4 mb-3">
-                                        <span className="text-white text-[10px] font-black px-4 py-1.5 rounded-full uppercase tracking-widest" style={{ backgroundColor: isComplete ? '#94a3b8' : isOverdue ? '#ef4444' : isInProgress ? '#f59e0b' : workBaseColor }}>
+                                    <div className="flex flex-wrap items-center gap-2 mb-2">
+                                        <span className="text-white text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest" style={{ backgroundColor: isComplete ? '#94a3b8' : isOverdue ? '#ef4444' : isInProgress ? '#f59e0b' : workBaseColor }}>
                                             {isOverdue ? 'OVERDUE' : item.status?.toUpperCase() || 'WAITING'}
                                         </span>
-                                        <span className="text-lg font-black text-indigo-600 flex items-center gap-2 bg-indigo-50 px-4 py-1 rounded-xl">
-                                            <MapPin size={20} /> {item.department}
+                                        <span className="text-sm font-black text-indigo-600 flex items-center gap-1.5 bg-indigo-50 px-3 py-1 rounded-xl">
+                                            <MapPin size={14} /> {item.department}
                                         </span>
                                     </div>
-                                    <h3 className="text-3xl font-black text-slate-800 leading-tight">{item.detail}</h3>
+                                    <h3 className="text-lg md:text-3xl font-black text-slate-800 leading-tight">{item.detail}</h3>
                                 </div>
-                                <div className="w-full md:w-72 p-6 flex flex-col items-center justify-center border-l-2 border-slate-50 bg-slate-50/30">
-                                    <div className="flex flex-col items-center text-center gap-3">
-                                        <div className="flex -space-x-4 hover:space-x-1 transition-all duration-300 mb-2">
+
+                                {/* Worker panel */}
+                                <div className="w-full md:w-60 px-4 py-3 md:p-6 flex flex-row md:flex-col items-center justify-between md:justify-center border-t-2 md:border-t-0 md:border-l-2 border-slate-50 bg-slate-50/30">
+                                    <div className="flex items-center gap-2">
+                                        <div className="flex -space-x-3 hover:space-x-0.5 transition-all duration-300">
                                             {workerList.length > 0 ? (
                                                 workerList.map((workerName, index) => {
                                                     const empId = (item.employee_ids ?? [])[index];
@@ -517,29 +518,33 @@ export default function HomePage() {
                                                         : masterEmployees.find(e => e.name === workerName);
                                                     const empDeptName = emp?.departments?.name || "";
                                                     const empBorderColor = deptColorMap[empDeptName] || workBaseColor;
-
                                                     return (
-                                                        <div key={index} className="w-16 h-16 rounded-2xl bg-white overflow-hidden border-4 shadow-md transition-transform hover:-translate-y-1 relative" style={{ borderColor: empBorderColor, zIndex: 10 - index }}>
+                                                        <div key={index} className="w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-white overflow-hidden border-4 shadow-md transition-transform hover:-translate-y-1 relative" style={{ borderColor: empBorderColor, zIndex: 10 - index }}>
                                                             <img src={emp?.image_url || getAvatarUrl(workerName)} className="w-full h-full object-cover" alt={workerName} />
                                                         </div>
                                                     );
                                                 })
                                             ) : (
-                                                <div className="w-16 h-16 rounded-2xl bg-white flex items-center justify-center border-4 border-slate-200 text-slate-300"><User size={32} /></div>
+                                                <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center border-4 border-slate-200 text-slate-300"><User size={22} /></div>
                                             )}
                                         </div>
-                                        <div>
-                                            <p className="text-lg font-black text-slate-800 leading-tight">{item.worker || "รอมอบหมาย"}</p>
-                                            <div className="mt-2 flex justify-center flex-wrap gap-1">
-                                                {roles.map(r => (
-                                                    <span key={r} className="px-2 py-0.5 rounded-lg text-[10px] font-black uppercase" style={{ backgroundColor: `${deptColorMap[r]}20`, color: deptColorMap[r] }}>{r}</span>
-                                                ))}
-                                            </div>
+                                        <div className="md:hidden">
+                                            <p className="text-sm font-black text-slate-800 leading-tight">{item.worker || "รอมอบหมาย"}</p>
+                                        </div>
+                                    </div>
+                                    <div className="hidden md:block text-center mt-3">
+                                        <p className="text-base font-black text-slate-800 leading-tight">{item.worker || "รอมอบหมาย"}</p>
+                                        <div className="mt-1.5 flex justify-center flex-wrap gap-1">
+                                            {roles.map(r => (
+                                                <span key={r} className="px-2 py-0.5 rounded-lg text-[10px] font-black uppercase" style={{ backgroundColor: `${deptColorMap[r]}20`, color: deptColorMap[r] }}>{r}</span>
+                                            ))}
                                         </div>
                                     </div>
                                 </div>
+
+                                {/* Admin action buttons */}
                                 {isAdmin && (
-                                    <div className="p-4 flex md:flex-col items-center justify-center gap-3 border-l-2 border-slate-50 bg-white">
+                                    <div className="p-3 md:p-4 flex flex-row md:flex-col items-center justify-end md:justify-center gap-2 border-t-2 md:border-t-0 md:border-l-2 border-slate-50 bg-white">
                                         <button onClick={(e) => { 
                                             e.stopPropagation(); 
                                             setEditingId(item.id); 
@@ -547,14 +552,18 @@ export default function HomePage() {
                                             const workerIds = workerNames.map(name => masterEmployees.find(e => e.name === name)?.id || '').filter(Boolean);
                                             setFormData({ ...initialFormState, work_date: item.work_date, work_time: item.work_time, department: item.department, detail: item.detail, worker_role: item.worker_role.split(", "), selected_workers: workerNames, selected_worker_ids: workerIds }); 
                                             window.scrollTo({ top: 0, behavior: 'smooth' }); 
-                                        }} className="w-14 h-14 flex items-center justify-center bg-white rounded-2xl shadow-sm border-2 border-slate-100 text-orange-500 hover:bg-orange-500 hover:text-white transition-all"><Pencil size={24} /></button>
+                                        }} className="w-10 h-10 md:w-14 md:h-14 flex items-center justify-center bg-white rounded-xl md:rounded-2xl shadow-sm border-2 border-slate-100 text-orange-500 hover:bg-orange-500 hover:text-white transition-all">
+                                            <Pencil size={18} />
+                                        </button>
                                         <button onClick={async (e) => { 
                                             e.stopPropagation(); 
                                             if (confirm('ลบงานนี้?')) { 
                                                 await supabase.from("work_schedule").delete().eq("id", item.id); 
                                                 if (user) refreshData(user.role, user.employeeId ?? null); 
                                             } 
-                                        }} className="w-14 h-14 flex items-center justify-center bg-red-50 rounded-2xl shadow-sm border-2 border-red-100 text-red-500 hover:bg-red-500 hover:text-white transition-all"><Trash2 size={24} /></button>
+                                        }} className="w-10 h-10 md:w-14 md:h-14 flex items-center justify-center bg-red-50 rounded-xl md:rounded-2xl shadow-sm border-2 border-red-100 text-red-500 hover:bg-red-500 hover:text-white transition-all">
+                                            <Trash2 size={18} />
+                                        </button>
                                     </div>
                                 )}
                             </div>
@@ -563,61 +572,60 @@ export default function HomePage() {
                 </div>
             </section>
 
+            {/* ── Work Detail Modal ── */}
             {showWorkModal && selectedWork && (
-                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[200] flex items-center justify-center p-4" onClick={() => setShowWorkModal(false)}>
-                    <div className="bg-white rounded-[2.5rem] w-full max-w-lg shadow-2xl relative overflow-hidden animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[200] flex items-end md:items-center justify-center p-0 md:p-4" onClick={() => setShowWorkModal(false)}>
+                    <div className="bg-white rounded-t-[2rem] md:rounded-[2.5rem] w-full max-w-lg shadow-2xl relative overflow-hidden animate-in slide-in-from-bottom md:zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
                         <div 
-                            className="h-3 w-full" 
+                            className="h-2.5 w-full" 
                             style={{ 
                                 background: (selectedWork.worker_role?.split(", ").length ?? 0) > 1
                                     ? `linear-gradient(to right, ${selectedWork.worker_role?.split(", ").map(r => deptColorMap[r] || '#94a3b8').join(", ")})`
                                     : (deptColorMap[selectedWork.worker_role?.split(", ")[0] || ""] || '#94a3b8')
                             }} 
                         />
-                        <div className="p-8 md:p-10">
-                            <div className="flex justify-between items-start mb-8">
+                        {/* drag handle for mobile */}
+                        <div className="flex justify-center pt-2 md:hidden">
+                            <div className="w-10 h-1 bg-slate-200 rounded-full" />
+                        </div>
+                        <div className="p-5 md:p-10">
+                            <div className="flex justify-between items-start mb-5 md:mb-8">
                                 <div className="flex flex-col gap-2">
-                                    <h3 className="text-2xl font-black text-slate-800 leading-tight">รายละเอียดงาน</h3>
+                                    <h3 className="text-lg md:text-2xl font-black text-slate-800 leading-tight">รายละเอียดภารกิจ</h3>
                                     <div className="flex flex-wrap gap-2">
                                         {selectedWork.worker_role ? (
                                             selectedWork.worker_role.split(", ").map(role => (
-                                                <span 
-                                                    key={role}
-                                                    className="px-3 py-1 rounded-lg text-[10px] font-black uppercase text-white shadow-sm"
-                                                    style={{ backgroundColor: deptColorMap[role] || '#94a3b8' }}
-                                                >
-                                                    {role}
-                                                </span>
+                                                <span key={role} className="px-3 py-1 rounded-lg text-[10px] font-black uppercase text-white shadow-sm" style={{ backgroundColor: deptColorMap[role] || '#94a3b8' }}>{role}</span>
                                             ))
                                         ) : (
                                             <span className="px-3 py-1 rounded-lg text-[10px] font-black uppercase text-slate-400 bg-slate-100">ไม่ระบุแผนก</span>
                                         )}
                                     </div>
                                 </div>
-                                <button onClick={() => setShowWorkModal(false)} className="p-3 bg-slate-50 rounded-2xl text-slate-400 hover:bg-slate-100 transition-colors">
-                                    <X size={20} />
+                                <button onClick={() => setShowWorkModal(false)} className="p-2.5 bg-slate-50 rounded-xl md:rounded-2xl text-slate-400 hover:bg-slate-100 transition-colors">
+                                    <X size={18} />
                                 </button>
                             </div>
 
-                            <div className="space-y-6">
-                                <div className="grid grid-cols-2 gap-4 text-sm font-bold">
-                                    <div className="p-5 bg-slate-50 rounded-2xl border border-slate-100">
-                                        <p className="text-[10px] text-slate-400 uppercase mb-2 font-black tracking-wider">สถานที่ / หน่วยงาน</p>
+                            <div className="space-y-4 md:space-y-6">
+                                <div className="grid grid-cols-2 gap-3 md:gap-4 text-sm font-bold">
+                                    <div className="p-4 bg-slate-50 rounded-xl md:rounded-2xl border border-slate-100">
+                                        <p className="text-[10px] text-slate-400 uppercase mb-1.5 font-black tracking-wider">สถานที่</p>
                                         <div className="flex items-center gap-2 text-slate-700">
-                                            <MapPin size={16} className="text-blue-500" />
-                                            {selectedWork.department || "ไม่ระบุ"}
+                                            <MapPin size={15} className="text-blue-500 shrink-0" />
+                                            <span className="truncate">{selectedWork.department || "ไม่ระบุ"}</span>
                                         </div>
                                     </div>
-                                    <div className="p-5 bg-slate-50 rounded-2xl border border-slate-100">
-                                        <p className="text-[10px] text-slate-400 uppercase mb-2 font-black tracking-wider">เวลานัดหมาย</p>
+                                    <div className="p-4 bg-slate-50 rounded-xl md:rounded-2xl border border-slate-100">
+                                        <p className="text-[10px] text-slate-400 uppercase mb-1.5 font-black tracking-wider">เวลานัดหมาย</p>
                                         <div className="flex items-center gap-2 text-slate-700">
-                                            <Clock size={16} className="text-blue-500" />
+                                            <Clock size={15} className="text-blue-500" />
                                             {selectedWork.work_time} น.
                                         </div>
                                     </div>
                                 </div>
 
-                                <div className="space-y-3">
+                                <div className="space-y-2">
                                     <p className="text-[10px] text-slate-400 uppercase font-black tracking-wider ml-2">ทีมช่างที่ปฏิบัติงาน</p>
                                     <div className="grid grid-cols-1 gap-2">
                                         {selectedWork.worker ? (
@@ -628,15 +636,14 @@ export default function HomePage() {
                                                     : masterEmployees.find(e => e.name === workerName);
                                                 const empDept = emp?.departments?.name || "";
                                                 const empColor = deptColorMap[empDept] || '#64748b';
-                                                
                                                 return (
-                                                    <div key={idx} className="flex items-center justify-between p-3 rounded-2xl border-2 transition-all" style={{ borderColor: `${empColor}20`, backgroundColor: `${empColor}05` }}>
-                                                        <div className="flex items-center gap-3">
-                                                            <div className="w-12 h-12 rounded-xl border-4 overflow-hidden shadow-sm" style={{ borderColor: empColor }}>
+                                                    <div key={idx} className="flex items-center justify-between p-2.5 md:p-3 rounded-xl md:rounded-2xl border-2 transition-all" style={{ borderColor: `${empColor}20`, backgroundColor: `${empColor}05` }}>
+                                                        <div className="flex items-center gap-2.5">
+                                                            <div className="w-10 h-10 rounded-xl border-4 overflow-hidden shadow-sm" style={{ borderColor: empColor }}>
                                                                 <img src={emp?.image_url || getAvatarUrl(workerName)} className="w-full h-full object-cover" />
                                                             </div>
                                                             <div>
-                                                                <p className="font-black text-slate-800">{workerName}</p>
+                                                                <p className="font-black text-slate-800 text-sm">{workerName}</p>
                                                                 <p className="text-[10px] font-bold opacity-60 uppercase" style={{ color: empColor }}>{empDept || "ไม่ระบุแผนก"}</p>
                                                             </div>
                                                         </div>
@@ -645,30 +652,30 @@ export default function HomePage() {
                                                 );
                                             })
                                         ) : (
-                                            <div className="p-4 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200 text-center text-slate-400 font-bold text-sm">ยังไม่มีการมอบหมายช่าง</div>
+                                            <div className="p-4 bg-slate-50 rounded-xl md:rounded-2xl border-2 border-dashed border-slate-200 text-center text-slate-400 font-bold text-sm">ยังไม่มีการมอบหมายช่าง</div>
                                         )}
                                     </div>
                                 </div>
 
-                                <div className="p-8 rounded-[2rem] bg-slate-900 text-white font-bold shadow-xl shadow-slate-200">
-                                    <p className="text-[10px] opacity-50 uppercase mb-3 font-black tracking-widest">รายละเอียดงาน</p>
-                                    <p className="text-lg leading-relaxed">{selectedWork.detail || "ไม่มีรายละเอียดเพิ่มเติม"}</p>
+                                <div className="p-5 md:p-8 rounded-[1.5rem] md:rounded-[2rem] bg-slate-900 text-white font-bold shadow-xl shadow-slate-200">
+                                    <p className="text-[10px] opacity-50 uppercase mb-2 font-black tracking-widest">รายละเอียดภารกิจ</p>
+                                    <p className="text-base md:text-lg leading-relaxed">{selectedWork.detail || "ไม่มีรายละเอียดเพิ่มเติม"}</p>
                                 </div>
                             </div>
 
-                            <div className="flex gap-4 mt-10">
+                            <div className="flex gap-3 mt-6 md:mt-10">
                                 {selectedWork.status === 'pending' && (
-                                    <button onClick={async () => { await supabase.from("work_schedule").update({ status: 'inprogress' }).eq("id", selectedWork.id); if (user) refreshData(user.role, user.employeeId ?? null); setShowWorkModal(false); }} className="flex-[2] py-4 bg-blue-600 rounded-2xl text-white font-black text-sm shadow-lg hover:bg-blue-700 active:scale-95 transition-all">เริ่มดำเนินงาน</button>
+                                    <button onClick={async () => { await supabase.from("work_schedule").update({ status: 'inprogress' }).eq("id", selectedWork.id); if (user) refreshData(user.role, user.employeeId ?? null); setShowWorkModal(false); }} className="flex-[2] py-3.5 md:py-4 bg-blue-600 rounded-xl md:rounded-2xl text-white font-black text-sm shadow-lg hover:bg-blue-700 active:scale-95 transition-all">เริ่มดำเนินงาน</button>
                                 )}
                                 {selectedWork.status === 'inprogress' && (
-                                    <button onClick={async () => { await supabase.from("work_schedule").update({ status: 'complete', completed_at: new Date().toISOString() }).eq("id", selectedWork.id); if (user) refreshData(user.role, user.employeeId ?? null); setShowWorkModal(false); }} className="flex-[2] bg-emerald-600 py-4 rounded-2xl text-white font-black text-sm shadow-lg hover:bg-emerald-700 active:scale-95 transition-all">เสร็จสิ้นภารกิจ</button>
+                                    <button onClick={async () => { await supabase.from("work_schedule").update({ status: 'complete', completed_at: new Date().toISOString() }).eq("id", selectedWork.id); if (user) refreshData(user.role, user.employeeId ?? null); setShowWorkModal(false); }} className="flex-[2] bg-emerald-600 py-3.5 md:py-4 rounded-xl md:rounded-2xl text-white font-black text-sm shadow-lg hover:bg-emerald-700 active:scale-95 transition-all">เสร็จสิ้นภารกิจ</button>
                                 )}
-                                <button onClick={() => setShowWorkModal(false)} className="flex-1 py-4 bg-slate-100 rounded-2xl font-black text-sm text-slate-500 hover:bg-slate-200 transition-colors active:scale-95">ย้อนกลับ</button>
+                                <button onClick={() => setShowWorkModal(false)} className="flex-1 py-3.5 md:py-4 bg-slate-100 rounded-xl md:rounded-2xl font-black text-sm text-slate-500 hover:bg-slate-200 transition-colors active:scale-95">ย้อนกลับ</button>
                             </div>
                         </div>
                     </div>
                 </div>
             )}
-        </MainLayout>
+        </main>
     );
 }

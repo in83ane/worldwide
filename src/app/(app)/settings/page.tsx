@@ -16,7 +16,6 @@ export default async function SettingsPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  // ดึง Profile เพื่อดู Role
   const { data: profile } = await supabase
     .from('profiles')
     .select('role')
@@ -28,12 +27,13 @@ export default async function SettingsPage() {
   const role = profile?.role || 'user'
 
   return (
-    <main className="min-h-screen ml-20 bg-slate-50/50 flex justify-center p-4 md:p-8">
+    // ลบ ml-20 ออก — layout จัดการ sidebar offset ให้แล้ว
+    <div className="min-h-screen bg-slate-50/50 flex justify-center p-4 md:p-8">
       <div className="w-full max-w-3xl">
-        
+
         {/* Header */}
         <header className="mb-10">
-          <h1 className="text-4xl font-black text-slate-900 flex items-center gap-3">
+          <h1 className="text-3xl md:text-4xl font-black text-slate-900 flex items-center gap-3">
             <div className="p-3 bg-slate-900 rounded-2xl text-white">
               <SettingsIcon size={28} />
             </div>
@@ -43,11 +43,10 @@ export default async function SettingsPage() {
         </header>
 
         {/* Profile Card */}
-        <section className="bg-white rounded-[2.5rem] border-2 border-slate-100 p-8 shadow-sm overflow-hidden relative">
-          {/* Background Decor */}
+        <section className="bg-white rounded-[2.5rem] border-2 border-slate-100 p-6 md:p-8 shadow-sm overflow-hidden relative">
           <div className="absolute top-0 right-0 w-32 h-32 bg-slate-50 rounded-bl-[5rem] -z-0 opacity-50" />
-          
-          <div className="relative z-10 flex flex-col md:flex-row items-center gap-8">
+
+          <div className="relative z-10 flex flex-col md:flex-row items-center gap-6 md:gap-8">
             <div className="relative">
               <Avatar className="h-24 w-24 border-4 border-white shadow-xl">
                 <AvatarImage src={avatarUrl} alt={name} />
@@ -77,6 +76,6 @@ export default async function SettingsPage() {
         </section>
 
       </div>
-    </main>
+    </div>
   )
 }

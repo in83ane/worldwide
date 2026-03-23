@@ -1,25 +1,20 @@
-import '../globals.css'
-import Sidebar from '../components/Sidebar'
-import type { Metadata } from 'next'
+import type { Metadata } from "next";
+import { Geist, Geist_Mono } from "next/font/google";
+import "./globals.css";
+
+const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
+const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'Worldwide',
-}
+  title: "Worldwide",
+};
 
-export default function AppLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <>
-      <Sidebar />
-
-      {/* 
-        mobile  : ไม่มี pl (sidebar อยู่ข้างล่าง) + pb เผื่อ bottom nav
-        desktop : pl-24 เพื่อเว้นที่ sidebar ซ้าย + pb กลับเป็น pb-6 ปกติ
-      */}
-      <main className="min-h-dvh px-4 pt-0 pb-[calc(5rem+env(safe-area-inset-bottom))] lg:pl-24 lg:pr-6 lg:pb-6">
-        <div className="mx-auto max-w-full rounded-2xl bg-white shadow-sm min-h-[70vh]">
-          {children}
-        </div>
-      </main>
-    </>
-  )
+    <html lang="th">
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gray-50`}>
+        {children}
+      </body>
+    </html>
+  );
 }

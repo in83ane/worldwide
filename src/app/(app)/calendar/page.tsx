@@ -251,7 +251,7 @@ export default function WorkCalendar() {
             });
 
             days.push(
-                <div key={date} className="h-36 border-r border-b border-slate-100 p-2 bg-white hover:bg-slate-50 transition-all cursor-pointer overflow-hidden"
+                <div key={date} className="h-20 md:h-36 border-r border-b border-slate-100 p-1 md:p-2 bg-white active:bg-slate-50 transition-all cursor-pointer overflow-hidden"
                     onClick={() => { setSelectedDate(dateObj); switchView('daily'); }}>
                     <div className="flex justify-between items-start mb-1">
                         <div className={`w-7 h-7 flex items-center justify-center rounded-xl text-[11px] font-bold ${isToday ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'text-slate-400'}`}>{date}</div>
@@ -301,19 +301,19 @@ export default function WorkCalendar() {
                 <div className="overflow-x-auto main-timeline-scroll">
                     <div style={{ width: `${(hours.length * hourWidth) + 260}px` }} className="relative">
                         <div className="flex bg-slate-50 border-b sticky top-0 z-30">
-                            <div className="w-[260px] p-5 font-bold text-slate-400 text-center border-r text-[11px] uppercase tracking-widest bg-slate-50">Technician Info</div>
-                            {hours.map(h => <div key={h} style={{ width: hourWidth }} className="p-5 text-center font-bold text-slate-500 border-r text-sm">{h}:00</div>)}
+                            <div className="w-[140px] md:w-[260px] p-3 md:p-5 font-bold text-slate-400 text-center border-r text-[10px] uppercase tracking-widest bg-slate-50">ช่าง</div>
+                            {hours.map(h => <div key={h} style={{ width: hourWidth }} className="p-3 md:p-5 text-center font-bold text-slate-500 border-r text-xs md:text-sm">{h}:00</div>)}
                         </div>
                         <div className="divide-y divide-slate-100">
                             {workers.map(worker => {
                                 const works = dayWorks.filter(w => w.worker === worker);
                                 return (
-                                    <div key={worker} className="flex min-h-[150px] relative">
-                                        <div className="w-[260px] sticky left-0 z-20 bg-white border-r flex shadow-lg shadow-slate-900/5 overflow-hidden">
+                                    <div key={worker} className="flex min-h-[120px] md:min-h-[150px] relative">
+                                        <div className="w-[140px] md:w-[260px] sticky left-0 z-20 bg-white border-r flex shadow-lg shadow-slate-900/5 overflow-hidden">
                                             <div className="w-2 shrink-0 h-full" style={{ backgroundColor: works[0].deptColor }}></div>
-                                            <div className="flex flex-col justify-center px-6">
-                                                <span className="font-bold text-slate-800 text-lg leading-tight mb-1">{cleanWorkerName(worker)}</span>
-                                                <span className="text-[13px] font-semibold uppercase tracking-wide" style={{ color: works[0].deptColor }}>{works[0].worker_role || "DEPARTMENT"}</span>
+                                            <div className="flex flex-col justify-center px-3 md:px-6">
+                                                <span className="font-bold text-slate-800 text-sm md:text-lg leading-tight mb-1">{cleanWorkerName(worker)}</span>
+                                                <span className="text-[11px] md:text-[13px] font-semibold uppercase tracking-wide" style={{ color: works[0].deptColor }}>{works[0].worker_role || "DEPT"}</span>
                                             </div>
                                         </div>
                                         <div className="flex-grow relative bg-slate-50/10">
@@ -390,7 +390,7 @@ export default function WorkCalendar() {
                             <div className="grid grid-cols-7 border-l border-t border-slate-50">{renderCalendarDays()}</div>
                         </div>
 
-                        <aside className="bg-white p-6 rounded-[2.5rem] border border-slate-100 flex flex-col h-[700px] shadow-sm">
+                        <aside className="hidden xl:flex bg-white p-6 rounded-[2.5rem] border border-slate-100 flex-col h-[700px] shadow-sm">
                             <div className="mb-6 space-y-4">
                                 <h3 className="flex items-center gap-2 font-bold text-sm text-slate-800"><div className="w-1.5 h-4 bg-emerald-500 rounded-full"></div> ประวัติงานที่สำเร็จ</h3>
                                 <div className="relative">
@@ -445,8 +445,8 @@ export default function WorkCalendar() {
                         {/* gradient bar เหมือน home */}
                         <div className="h-3 w-full" style={barStyle} />
 
-                        <div className="p-10">
-                            <div className="flex justify-between items-start mb-8">
+                        <div className="p-5 md:p-10">
+                            <div className="flex justify-between items-start mb-5 md:mb-8">
                                 <div className="flex flex-col gap-2">
                                     <h3 className="text-2xl font-black text-slate-800 leading-tight">รายละเอียดงาน</h3>
                                     {/* role badges ผสมสีตามแผนก */}
@@ -475,13 +475,13 @@ export default function WorkCalendar() {
                                         <div className="flex items-center gap-2 text-slate-700"><Clock size={16} className="text-blue-500" />{selectedWork.work_time} น.</div>
                                     </div>
                                 </div>
-                                <div className="p-8 rounded-[2rem] bg-slate-900 text-white font-bold shadow-xl">
+                                <div className="p-5 md:p-8 rounded-[2rem] bg-slate-900 text-white font-bold shadow-xl">
                                     <p className="text-[10px] opacity-50 uppercase mb-3 font-black tracking-widest">รายละเอียดงาน</p>
                                     <p className="text-lg leading-relaxed">{selectedWork.detail || "ไม่มีรายละเอียดเพิ่มเติม"}</p>
                                 </div>
                             </div>
 
-                            <div className="flex gap-4 mt-10">
+                            <div className="flex gap-3 mt-6 md:mt-10">
                                 {selectedWork.status === 'pending' && (
                                     <button onClick={() => updateWorkStatus(selectedJobGroup.map(w => w.id), 'inprogress')}
                                         className="flex-[2] py-4 rounded-2xl text-white font-black text-sm shadow-lg active:scale-95 transition-all"

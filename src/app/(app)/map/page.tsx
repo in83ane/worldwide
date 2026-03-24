@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import {
   Navigation, Loader2, ExternalLink, X, Clock, MapPin,
   Building2, Search, ChevronDown, LocateFixed, PlayCircle, CheckCircle2,
+  Timer, CalendarRange,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import type { MapTask, MapComponentProps } from './MapComponent';
@@ -21,12 +22,14 @@ interface WorkScheduleRow {
   detail: string;
   department: string;
   work_date: string;
+  end_date: string | null;
   work_time: string;
   worker: string;
   worker_role: string;
   status: 'pending' | 'inprogress' | 'complete';
   lat: number | null;
   lng: number | null;
+  started_at: string | null;
   completed_at: string | null;
   employee_ids: string[] | null;
 }
@@ -67,9 +70,42 @@ function todayStr(): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok' }).format(new Date());
 }
 
-function isActiveOnDate(work: WorkScheduleRow & { end_date?: string | null }, date: string): boolean {
-  const effectiveEnd = (work as { end_date?: string | null }).end_date || work.work_date;
+function isActiveOnDate(work: WorkScheduleRow, date: string): boolean {
+  const effectiveEnd = work.end_date || work.work_date;
   return work.work_date <= date && effectiveEnd >= date;
+}
+
+function formatDisplayDate(dateStr: string | null): string {
+  if (!dateStr) return '';
+  const [y, m, d] = dateStr.split('-');
+  return `${d}/${m}/${parseInt(y) + 543}`;
+}
+
+function formatTimestamp(isoString: string | null | undefined): string {
+  if (!isoString) return '—';
+  const d = new Date(isoString);
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yy = String(d.getFullYear() + 543).slice(-2);
+  const HH = String(d.getHours()).padStart(2, '0');
+  const MM = String(d.getMinutes()).padStart(2, '0');
+  return `${dd}/${mm}/${yy} ${HH}:${MM} น.`;
+}
+
+function calcDuration(start: string | null | undefined, end: string | null | undefined): string | null {
+  if (!start || !end) return null;
+  const diffMs = new Date(end).getTime() - new Date(start).getTime();
+  if (diffMs <= 0) return null;
+  const totalMins = Math.floor(diffMs / 60000);
+  const h = Math.floor(totalMins / 60);
+  const m = totalMins % 60;
+  if (h > 0 && m > 0) return `${h} ชม. ${m} น.`;
+  if (h > 0) return `${h} ชม.`;
+  return `${m} น.`;
+}
+
+function isMultiDay(work: WorkScheduleRow): boolean {
+  return !!work.end_date && work.end_date !== work.work_date;
 }
 
 export default function MapPage() {
@@ -110,6 +146,9 @@ export default function MapPage() {
   const [showModal, setShowModal] = useState(false);
   const [selectedWork, setSelectedWork] = useState<WorkScheduleRow | null>(null);
 
+  // ────────────────────────────────────────────────
+  // Init
+  // ────────────────────────────────────────────────
   useEffect(() => {
     const init = async () => {
       setLoading(true);
@@ -139,6 +178,9 @@ export default function MapPage() {
     init();
   }, [supabase]);
 
+  // ────────────────────────────────────────────────
+  // Fetch works
+  // ────────────────────────────────────────────────
   useEffect(() => {
     const fetchWorks = async () => {
       const targetId = selectedEmployeeId;
@@ -156,7 +198,7 @@ export default function MapPage() {
         .lte('work_date', today)
         .or(`end_date.gte.${today},end_date.is.null,work_date.gte.${today}`);
 
-      const rows = (data ?? []) as (WorkScheduleRow & { end_date?: string | null })[];
+      const rows = (data ?? []) as WorkScheduleRow[];
       const todayRows = rows.filter(w => isActiveOnDate(w, today));
       const activeWorks = todayRows.filter(w => w.status !== 'complete');
       setWorks(activeWorks);
@@ -195,22 +237,38 @@ export default function MapPage() {
     }
   }, []);
 
+  // ────────────────────────────────────────────────
+  // Update status — บันทึก started_at / completed_at
+  // ────────────────────────────────────────────────
   const updateStatus = async (id: string, status: 'pending' | 'inprogress' | 'complete') => {
-    const updates: Partial<WorkScheduleRow> & { completed_at?: string } = { status };
+    const updates: Record<string, string> = { status };
+    if (status === 'inprogress') updates.started_at = new Date().toISOString();
     if (status === 'complete') updates.completed_at = new Date().toISOString();
+
     await supabase.from('work_schedule').update(updates).eq('id', id);
-    // works list: complete → ลบออก (ไม่แสดงใน job list)
-    setWorks(prev => status === 'complete' ? prev.filter(w => w.id !== id) : prev.map(w => w.id === id ? { ...w, status } : w));
-    // mapTasks: อัพเดต status เสมอ — ไม่ลบออก เพื่อให้แผนที่ยังแสดงหมุดสีเขียว ✓
-    setMapTasks(prev => prev.map(t => t.id === id ? { ...t, status } : t));
-    // orderedTasks: complete → ลบออกจาก route list, inprogress → อัพเดต status
-    setOrderedTasks(prev => status === 'complete'
-      ? prev.filter(t => t.id !== id)
-      : prev.map(t => t.id === id ? { ...t, status } : t)
+
+    // works list: complete → ลบออก
+    setWorks(prev =>
+      status === 'complete'
+        ? prev.filter(w => w.id !== id)
+        : prev.map(w => w.id === id ? { ...w, status, ...updates } : w)
     );
+    // mapTasks: อัพเดต status เสมอ ไม่ลบ เพื่อให้แผนที่แสดงหมุดสีเขียว ✓
+    setMapTasks(prev => prev.map(t => t.id === id ? { ...t, status } : t));
+    // orderedTasks: complete → ลบออก, inprogress → อัพเดต
+    setOrderedTasks(prev =>
+      status === 'complete'
+        ? prev.filter(t => t.id !== id)
+        : prev.map(t => t.id === id ? { ...t, status } : t)
+    );
+    // อัปเดต selectedWork ที่เปิด modal อยู่ด้วย
+    setSelectedWork(prev => prev?.id === id ? { ...prev, status, ...updates } as WorkScheduleRow : prev);
     setShowModal(false);
   };
 
+  // ────────────────────────────────────────────────
+  // Start input / GPS
+  // ────────────────────────────────────────────────
   const handleStartInputChange = (value: string) => {
     setStartInput(value);
     setStartPoint(null);
@@ -267,6 +325,7 @@ export default function MapPage() {
     <div className="min-h-screen bg-slate-50 lg:pl-20 pb-24 lg:pb-6">
       <div className="p-4 space-y-4">
 
+        {/* Header */}
         <header className="bg-white p-4 md:p-6 rounded-[2rem] shadow-sm border border-slate-100">
           <div className="flex items-center justify-between gap-3 mb-4">
             <div className="flex items-center gap-3">
@@ -357,6 +416,7 @@ export default function MapPage() {
           </div>
         ) : (
           <>
+            {/* Map */}
             <div className="bg-white p-2 rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden" style={{ height: 'clamp(260px, 45vw, 480px)' }}>
               {mapTasks.length > 0 ? (
                 <MapComponent
@@ -374,6 +434,7 @@ export default function MapPage() {
               )}
             </div>
 
+            {/* Route order */}
             <div className="bg-white rounded-[2rem] p-5 shadow-sm border border-slate-100">
               <h2 className="font-black text-slate-800 mb-4 flex items-center gap-2 text-sm">
                 <Navigation size={16} className="text-blue-600" /> ลำดับเส้นทางที่เหมาะสม
@@ -424,6 +485,7 @@ export default function MapPage() {
               )}
             </div>
 
+            {/* Work list */}
             <div className="space-y-3">
               <h2 className="font-black text-slate-800 px-1 text-sm">งานที่รอดำเนินการวันนี้ ({works.length})</h2>
               {works.length === 0 ? (
@@ -431,7 +493,6 @@ export default function MapPage() {
                   <p className="font-bold text-sm">ไม่มีงานค้างสำหรับวันนี้</p>
                 </div>
               ) : (() => {
-                // เรียง works ตามลำดับ orderedTasks (#1, #2, ...) งานที่ไม่มีใน orderedTasks ไปต่อท้าย
                 const orderMap = new Map(orderedTasks.map((t, i) => [t.id, i]));
                 const sortedWorks = [...works].sort((a, b) => {
                   const ia = orderMap.has(a.id) ? orderMap.get(a.id)! : 9999;
@@ -477,17 +538,25 @@ export default function MapPage() {
         )}
       </div>
 
+      {/* ════════════════════════════════
+          Modal รายละเอียดงาน
+      ════════════════════════════════ */}
       {showModal && selectedWork && (() => {
         const roles = selectedWork.worker_role?.split(', ') ?? [];
         const colors = roles.map(r => deptColorMap[r] || '#94a3b8');
         const barStyle = colors.length > 1 ? { background: `linear-gradient(to right, ${colors.join(', ')})` } : { backgroundColor: colors[0] };
         const mainColor = colors[0] || '#94a3b8';
+        const duration = calcDuration(selectedWork.started_at, selectedWork.completed_at);
+        const hasTime = selectedWork.started_at || selectedWork.completed_at;
+
         return (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[200] flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => setShowModal(false)}>
             <div className="bg-white w-full sm:max-w-lg sm:rounded-[2.5rem] rounded-t-[2.5rem] shadow-2xl relative overflow-hidden" onClick={e => e.stopPropagation()}>
               <div className="h-3 w-full" style={barStyle} />
               <div className="flex justify-center pt-3 sm:hidden"><div className="w-10 h-1.5 rounded-full bg-slate-200" /></div>
+
               <div className="p-6 sm:p-10">
+                {/* Title */}
                 <div className="flex justify-between items-start mb-6">
                   <div className="flex flex-col gap-2">
                     <h3 className="text-xl font-black text-slate-800 leading-tight">รายละเอียดงาน</h3>
@@ -500,7 +569,8 @@ export default function MapPage() {
                   <button onClick={() => setShowModal(false)} className="p-2.5 bg-slate-50 rounded-2xl text-slate-400 hover:bg-slate-100 shrink-0 ml-3"><X size={18} /></button>
                 </div>
 
-                <div className="space-y-4">
+                <div className="space-y-3">
+                  {/* สถานที่ + เวลานัดหมาย */}
                   <div className="grid grid-cols-2 gap-3 text-sm font-bold">
                     <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
                       <p className="text-[10px] text-slate-400 uppercase mb-1.5 font-black tracking-wider">สถานที่</p>
@@ -511,12 +581,79 @@ export default function MapPage() {
                       <div className="flex items-center gap-2 text-slate-700"><Clock size={14} className="text-blue-500" />{selectedWork.work_time} น.</div>
                     </div>
                   </div>
+
+                  {/* วันที่ (รองรับ multi-day) */}
+                  <div className={`grid gap-3 text-sm font-bold ${isMultiDay(selectedWork) ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                      <p className="text-[10px] text-slate-400 uppercase mb-1.5 font-black tracking-wider">วันที่</p>
+                      <div className="flex items-center gap-2 text-slate-700">
+                        <CalendarRange size={14} className="text-blue-500 shrink-0" />
+                        <span>{formatDisplayDate(selectedWork.work_date)}</span>
+                      </div>
+                    </div>
+                    {isMultiDay(selectedWork) && (
+                      <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100">
+                        <p className="text-[10px] text-emerald-500 uppercase mb-1.5 font-black tracking-wider">วันที่จบ</p>
+                        <div className="flex items-center gap-2 text-emerald-700">
+                          <CalendarRange size={14} className="text-emerald-500 shrink-0" />
+                          <span>{formatDisplayDate(selectedWork.end_date)}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* รายละเอียดงาน */}
                   <div className="p-6 rounded-[2rem] bg-slate-900 text-white font-bold shadow-xl">
                     <p className="text-[10px] opacity-50 uppercase mb-2 font-black tracking-widest">รายละเอียดงาน</p>
-                    <p className="text-base md:text-lg leading-relaxed">{selectedWork.detail || "ไม่มีรายละเอียดเพิ่มเติม"}</p>
+                    <p className="text-base leading-relaxed">{selectedWork.detail || 'ไม่มีรายละเอียดเพิ่มเติม'}</p>
                   </div>
+
+                  {/* บันทึกเวลาดำเนินงาน */}
+                  {hasTime && (
+                    <div className="rounded-2xl border border-slate-100 overflow-hidden">
+                      <div className="bg-slate-50 px-4 py-2.5 flex items-center justify-between border-b border-slate-100">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                          <Timer size={11} /> บันทึกเวลาดำเนินงาน
+                        </span>
+                        {duration && (
+                          <span className="text-[10px] font-black text-violet-600 bg-violet-50 px-2.5 py-1 rounded-lg flex items-center gap-1">
+                            <Timer size={10} /> รวม {duration}
+                          </span>
+                        )}
+                      </div>
+                      <div className="divide-y divide-slate-50">
+                        <div className="flex items-center gap-3 px-4 py-3">
+                          <div className="w-7 h-7 rounded-xl bg-blue-50 flex items-center justify-center shrink-0">
+                            <PlayCircle size={15} className="text-blue-500" />
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">เริ่มดำเนินงาน</p>
+                            <p className="text-sm font-bold text-slate-800">
+                              {selectedWork.started_at
+                                ? formatTimestamp(selectedWork.started_at)
+                                : <span className="text-slate-300">ยังไม่ได้เริ่ม</span>}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3 px-4 py-3">
+                          <div className="w-7 h-7 rounded-xl bg-emerald-50 flex items-center justify-center shrink-0">
+                            <CheckCircle2 size={15} className="text-emerald-500" />
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">เสร็จสิ้น</p>
+                            <p className="text-sm font-bold text-slate-800">
+                              {selectedWork.completed_at
+                                ? formatTimestamp(selectedWork.completed_at)
+                                : <span className="text-slate-300">ยังไม่เสร็จ</span>}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
+                {/* Action buttons */}
                 <div className="flex gap-3 mt-6">
                   {selectedWork.status === 'pending' && (
                     <button onClick={() => updateStatus(selectedWork.id, 'inprogress')}
@@ -527,7 +664,9 @@ export default function MapPage() {
                   )}
                   {selectedWork.status === 'inprogress' && (
                     <button onClick={() => updateStatus(selectedWork.id, 'complete')}
-                      className="flex-[2] bg-emerald-600 py-4 rounded-2xl text-white font-black text-sm shadow-lg hover:bg-emerald-700 active:scale-95 transition-all">เสร็จสิ้นภารกิจ</button>
+                      className="flex-[2] bg-emerald-600 py-4 rounded-2xl text-white font-black text-sm shadow-lg hover:bg-emerald-700 active:scale-95 transition-all flex items-center justify-center gap-2">
+                      <CheckCircle2 size={18} /> เสร็จสิ้น
+                    </button>
                   )}
                   <button onClick={() => setShowModal(false)} className="flex-1 py-4 bg-slate-100 rounded-2xl font-black text-sm text-slate-500 hover:bg-slate-200 active:scale-95 transition-all">ย้อนกลับ</button>
                 </div>
@@ -536,7 +675,6 @@ export default function MapPage() {
           </div>
         );
       })()}
-
     </div>
   );
 }

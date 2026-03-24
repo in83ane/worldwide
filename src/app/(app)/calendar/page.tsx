@@ -657,7 +657,7 @@ export default function WorkCalendar() {
                                                         <CheckCircle2 size={15} className="text-emerald-500" />
                                                     </div>
                                                     <div>
-                                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">เสร็จสิ้นงาน</p>
+                                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">เสร็จสิ้น</p>
                                                         <p className="text-sm font-bold text-slate-800">
                                                             {selectedWork.completed_at ? formatTimestamp(selectedWork.completed_at) : <span className="text-slate-300">ยังไม่เสร็จ</span>}
                                                         </p>
@@ -676,7 +676,7 @@ export default function WorkCalendar() {
                                     )}
                                     {selectedWork.status === 'inprogress' && (
                                         <button onClick={() => updateWorkStatus(selectedJobGroup.map(w => w.id), 'complete')}
-                                            className="flex-[2] bg-emerald-600 py-3.5 md:py-4 rounded-xl md:rounded-2xl text-white font-black text-sm shadow-lg hover:bg-emerald-700 active:scale-95 transition-all">เสร็จสิ้นงาน</button>
+                                            className="flex-[2] bg-emerald-600 py-3.5 md:py-4 rounded-xl md:rounded-2xl text-white font-black text-sm shadow-lg hover:bg-emerald-700 active:scale-95 transition-all">เสร็จสิ้น</button>
                                     )}
                                     <button onClick={() => setShowWorkModal(false)} className="flex-1 py-3.5 md:py-4 bg-slate-100 rounded-xl md:rounded-2xl font-black text-sm text-slate-500 hover:bg-slate-200 transition-colors active:scale-95">ย้อนกลับ</button>
                                 </div>

@@ -27,11 +27,9 @@ export default async function SettingsPage() {
   const role = profile?.role || 'user'
 
   return (
-    // ลบ ml-20 ออก — layout จัดการ sidebar offset ให้แล้ว
     <div className="min-h-screen bg-slate-50/50 flex justify-center p-4 md:p-8">
       <div className="w-full max-w-3xl">
 
-        {/* Header */}
         <header className="mb-10">
           <h1 className="text-3xl md:text-4xl font-black text-slate-900 flex items-center gap-3">
             <div className="p-3 bg-slate-900 rounded-2xl text-white">
@@ -42,7 +40,6 @@ export default async function SettingsPage() {
           <p className="text-slate-500 font-bold mt-2 ml-1">จัดการข้อมูลส่วนตัวและบัญชีของคุณ</p>
         </header>
 
-        {/* Profile Card */}
         <section className="bg-white rounded-[2.5rem] border-2 border-slate-100 p-6 md:p-8 shadow-sm overflow-hidden relative">
           <div className="absolute top-0 right-0 w-32 h-32 bg-slate-50 rounded-bl-[5rem] -z-0 opacity-50" />
 

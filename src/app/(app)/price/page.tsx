@@ -87,7 +87,6 @@ export default function PricePage() {
         }
     };
 
-    // --- ฟังก์ชันจัดการ Category ที่เพิ่มใหม่ ---
     const handleEditCategory = async (oldName: string) => {
         const newName = prompt("แก้ไขชื่อหมวดหมู่:", oldName);
         if (!newName || newName === oldName) return;
@@ -100,7 +99,6 @@ export default function PricePage() {
         if (error) {
             alert("ไม่สามารถแก้ไขได้: " + error.message);
         } else {
-            // อัปเดตลำดับใน localStorage
             const savedPriority = localStorage.getItem('category_priority');
             if (savedPriority) {
                 const priorityArray = JSON.parse(savedPriority) as string[];
@@ -133,7 +131,6 @@ export default function PricePage() {
             }
         }
     };
-    // --------------------------------------
 
     useEffect(() => {
         async function checkAuth() {
@@ -208,7 +205,6 @@ export default function PricePage() {
 
     return (
         <main className="flex min-h-screen bg-slate-50/50">
-            {/* Sidebar */}
             <aside className="w-56 bg-white border-r border-slate-100 p-4 hidden lg:block sticky top-0 h-screen overflow-y-auto">
                 <div className="flex items-center gap-2 mb-8 px-2">
                     <LayoutGrid className="text-slate-900" size={16} />
@@ -269,7 +265,6 @@ export default function PricePage() {
                 </ul>
             </aside>
 
-            {/* Main Content */}
             <div className="flex-1 p-4 md:p-8">
                 <header className="mb-8 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6">
                     <div className="flex items-center gap-4">
@@ -344,7 +339,6 @@ export default function PricePage() {
                 </div>
             </div>
 
-            {/* Modal Form */}
             {showFormModal && (
                 <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-[150] flex items-center justify-center p-4">
                     <div className={`bg-white rounded-[2.5rem] border w-full max-w-lg shadow-2xl p-8 overflow-y-auto max-h-[90vh] ${editingId ? 'border-orange-100' : 'border-slate-100'}`}>

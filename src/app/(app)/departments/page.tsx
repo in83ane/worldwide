@@ -90,7 +90,6 @@ export default function DepartmentsPage() {
   };
 
   return (
-    // เปลี่ยนจาก <main> เป็น <div> — layout มี <main> ครอบอยู่แล้ว
     <div className="max-w-4xl mx-auto p-4 md:p-8">
       <header className="mb-8 md:mb-10">
         <button

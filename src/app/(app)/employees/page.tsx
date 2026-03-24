@@ -233,7 +233,6 @@ export default function EmployeesPage() {
 
     return (
         <main className="max-w-7xl mx-auto p-3 md:p-8 min-h-screen bg-slate-50/30">
-            {/* ── Header ── */}
             <header className="mb-5 md:mb-8 flex flex-col md:flex-row md:items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
                     <div className="p-2.5 md:p-3 bg-slate-900 rounded-xl md:rounded-2xl text-white shadow-xl"><Users size={20} /></div>
@@ -252,7 +251,6 @@ export default function EmployeesPage() {
                 </div>
             </header>
 
-            {/* ── Mobile: FAB to open form ── */}
             <div className="lg:hidden mb-4">
                 <button onClick={() => { setShowForm(true); setIsEditing(false); setEditId(null); setPreviewUrl(null); setFile(null); }}
                     className="w-full py-3 bg-slate-900 text-white rounded-xl font-black flex items-center justify-center gap-2 shadow-lg text-sm active:scale-[0.98] transition-all">
@@ -261,9 +259,7 @@ export default function EmployeesPage() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 md:gap-8 items-start">
-                {/* ── Form (desktop: always visible, mobile: modal) ── */}
                 <section className={`lg:col-span-4 ${showForm || isEditing ? 'block' : 'hidden lg:block'}`}>
-                    {/* Mobile overlay */}
                     {(showForm || isEditing) && (
                         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 lg:hidden" onClick={resetForm} />
                     )}
@@ -276,7 +272,6 @@ export default function EmployeesPage() {
                         ${isEditing ? 'border-orange-500' : 'border-white'}
                     `}>
                         <form onSubmit={handleSubmit} className="p-5 md:p-8">
-                            {/* Drag handle for mobile */}
                             <div className="flex justify-center mb-3 lg:hidden">
                                 <div className="w-10 h-1 bg-slate-200 rounded-full" />
                             </div>
@@ -331,7 +326,6 @@ export default function EmployeesPage() {
                     </div>
                 </section>
 
-                {/* ── Employee List ── */}
                 <section className="lg:col-span-8">
                     <div className="bg-white rounded-[1.5rem] md:rounded-[2.5rem] border-4 border-white shadow-xl overflow-hidden min-h-[300px]">
                         <div className="p-4 md:p-6 border-b border-slate-50 bg-slate-50/30 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">

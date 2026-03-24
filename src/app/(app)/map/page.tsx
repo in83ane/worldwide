@@ -570,11 +570,19 @@ export default function MapPage() {
 
         return (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[200] flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => setShowModal(false)}>
-            <div className="bg-white w-full sm:max-w-lg sm:rounded-[2.5rem] rounded-t-[2.5rem] shadow-2xl relative overflow-hidden" onClick={e => e.stopPropagation()}>
-              <div className="h-3 w-full" style={barStyle} />
-              <div className="flex justify-center pt-3 sm:hidden"><div className="w-10 h-1.5 rounded-full bg-slate-200" /></div>
+            {/* ── FIXED: max-h + flex-col so inner content scrolls ── */}
+            <div
+              className="bg-white w-full sm:max-w-lg sm:rounded-[2.5rem] rounded-t-[2.5rem] shadow-2xl relative overflow-hidden flex flex-col max-h-[90dvh]"
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Sticky top bar */}
+              <div className="shrink-0">
+                <div className="h-3 w-full" style={barStyle} />
+                <div className="flex justify-center pt-3 sm:hidden"><div className="w-10 h-1.5 rounded-full bg-slate-200" /></div>
+              </div>
 
-              <div className="p-6 sm:p-10">
+              {/* Scrollable content */}
+              <div className="overflow-y-auto p-6 sm:p-10">
                 {/* Title */}
                 <div className="flex justify-between items-start mb-6">
                   <div className="flex flex-col gap-2">

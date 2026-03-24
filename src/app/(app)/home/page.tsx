@@ -1,6 +1,5 @@
-'use client';
-
-import React, { useMemo, useState, useEffect, useCallback, useRef } from "react";
+"use client";
+import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -649,15 +648,23 @@ export default function HomePage() {
             {/* ── Work Detail Modal ───────────────────────────────────────────── */}
             {showWorkModal && selectedWork && (
                 <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[200] flex items-end md:items-center justify-center p-0 md:p-4" onClick={() => setShowWorkModal(false)}>
-                    <div className="bg-white rounded-t-[2rem] md:rounded-[2.5rem] w-full md:max-w-lg shadow-2xl relative overflow-hidden md:animate-in md:zoom-in-95 md:duration-200" onClick={e => e.stopPropagation()}>
-                        <div className="h-2.5 w-full" style={{
-                            background: (selectedWork.worker_role?.split(", ").length ?? 0) > 1
-                                ? `linear-gradient(to right, ${selectedWork.worker_role?.split(", ").map(r => deptColorMap[r] || '#94a3b8').join(", ")})`
-                                : (deptColorMap[selectedWork.worker_role?.split(", ")[0] || ""] || '#94a3b8')
-                        }} />
-                        <div className="flex justify-center pt-2 md:hidden"><div className="w-10 h-1 bg-slate-200 rounded-full" /></div>
+                    {/* ── FIXED: max-h + flex-col so inner content scrolls ── */}
+                    <div
+                        className="bg-white rounded-t-[2rem] md:rounded-[2.5rem] w-full md:max-w-lg shadow-2xl relative overflow-hidden flex flex-col max-h-[90dvh]"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        {/* Sticky top bar */}
+                        <div className="shrink-0">
+                            <div className="h-2.5 w-full" style={{
+                                background: (selectedWork.worker_role?.split(", ").length ?? 0) > 1
+                                    ? `linear-gradient(to right, ${selectedWork.worker_role?.split(", ").map(r => deptColorMap[r] || '#94a3b8').join(", ")})`
+                                    : (deptColorMap[selectedWork.worker_role?.split(", ")[0] || ""] || '#94a3b8')
+                            }} />
+                            <div className="flex justify-center pt-2 md:hidden"><div className="w-10 h-1 bg-slate-200 rounded-full" /></div>
+                        </div>
 
-                        <div className="p-5 md:p-10">
+                        {/* Scrollable content */}
+                        <div className="overflow-y-auto p-5 md:p-10">
                             <div className="flex justify-between items-start mb-5 md:mb-8">
                                 <div className="flex flex-col gap-2">
                                     <h3 className="text-lg md:text-2xl font-black text-slate-800 leading-tight">รายละเอียดงาน</h3>

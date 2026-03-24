@@ -3,9 +3,11 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
     ChevronLeft, ChevronRight, Clock, CalendarDays,
     X, Search, Building2, Inbox, CheckCircle2,
-    PlayCircle, Timer, CalendarRange, MapPin
+    PlayCircle, Timer, CalendarRange, MapPin, Camera
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import PhotoUploadModal from "@/components/PhotoUploadModal";
+import { uploadWorkPhoto } from "@/lib/uploadWorkPhoto";
 
 interface RawWorkSchedule {
     id: string;
@@ -20,6 +22,8 @@ interface RawWorkSchedule {
     completed_at: string | null;
     started_at?: string | null;
     employee_ids: string[] | null;
+    start_photo_url?: string | null;
+    complete_photo_url?: string | null;
 }
 
 interface WorkSchedule extends RawWorkSchedule {
@@ -98,6 +102,9 @@ export default function WorkCalendar() {
     const [currentEmployeeId, setCurrentEmployeeId] = useState<string | null>(null);
     const [isAdmin, setIsAdmin] = useState(false);
     const [deptColorMap, setDeptColorMap] = useState<Record<string, string>>({});
+
+    // Photo upload state
+    const [photoModal, setPhotoModal] = useState<{ mode: 'start' | 'complete'; ids: string[]; detail: string } | null>(null);
 
     useEffect(() => {
         const handlePopState = () => {
@@ -211,12 +218,34 @@ export default function WorkCalendar() {
 
     const cleanWorkerName = (name: string) => name.replace(/\s*\(.*?\)\s*/g, "").trim();
 
-    const updateWorkStatus = async (ids: string[], status: 'pending' | 'inprogress' | 'complete') => {
-        const updateData: Partial<RawWorkSchedule> & { started_at?: string; completed_at?: string } = { status };
-        if (status === 'complete') updateData.completed_at = new Date().toISOString();
-        if (status === 'inprogress') updateData.started_at = new Date().toISOString();
-        const { error } = await supabase.from("work_schedule").update(updateData).in("id", ids);
-        if (!error) { fetchWorkSchedules(currentEmployeeId, isAdmin); setShowWorkModal(false); }
+    // ── Photo-aware status update ──────────────────────────────────────────────
+    const handleStatusAction = (ids: string[], status: 'inprogress' | 'complete', detail: string) => {
+        setShowWorkModal(false);
+        setPhotoModal({ mode: status === 'inprogress' ? 'start' : 'complete', ids, detail });
+    };
+
+    const handlePhotoConfirm = async (file: File) => {
+        if (!photoModal) return;
+        const { mode, ids } = photoModal;
+        const firstId = ids[0];
+
+        // Upload photo
+        const photoUrl = await uploadWorkPhoto(supabase, file, firstId, mode);
+
+        // Build update payload
+        const status = mode === 'start' ? 'inprogress' : 'complete';
+        const updateData: Record<string, string> = { status };
+        if (mode === 'start') {
+            updateData.started_at = new Date().toISOString();
+            updateData.start_photo_url = photoUrl;
+        } else {
+            updateData.completed_at = new Date().toISOString();
+            updateData.complete_photo_url = photoUrl;
+        }
+
+        await supabase.from("work_schedule").update(updateData).in("id", ids);
+        await fetchWorkSchedules(currentEmployeeId, isAdmin);
+        setPhotoModal(null);
     };
 
     const handleEventClick = (e: React.MouseEvent, group: WorkSchedule[]) => {
@@ -368,7 +397,6 @@ export default function WorkCalendar() {
                                     <p className="font-bold text-slate-800 text-sm">{cleanWorkerName(work.worker)}</p>
                                     <div className="flex items-center gap-1.5 mt-0.5 text-[11px] font-bold text-slate-400"><Building2 size={11} /> {work.department}</div>
                                     <p className="text-[11px] text-slate-400 line-clamp-1 mt-1">{work.detail}</p>
-                                    {/* timestamps */}
                                     <div className="mt-2 pt-2 border-t border-slate-50 grid grid-cols-2 gap-1">
                                         <div className="flex items-center gap-1 text-[9px] font-bold text-slate-400">
                                             <PlayCircle size={15} className="text-blue-500" /> {formatTimestamp(work.started_at)}
@@ -545,7 +573,6 @@ export default function WorkCalendar() {
                                         <p className="text-sm font-bold text-slate-800 group-hover:text-blue-600 transition-colors">{cleanWorkerName(work.worker)}</p>
                                         <div className="flex items-center gap-1.5 mt-1 text-[11px] font-bold text-slate-500"><Building2 size={12} className="text-slate-400" /><span>{work.department}</span></div>
                                         <p className="text-[11px] text-slate-400 line-clamp-2 mt-1.5 leading-relaxed">{work.detail}</p>
-                                        {/* timestamps */}
                                         <div className="mt-2 pt-2 border-t border-slate-50 grid grid-cols-2 gap-1">
                                             <div className="flex items-center gap-1 text-[9px] font-bold text-slate-400">
                                                 <PlayCircle size={15} className="text-blue-500" /> {formatTimestamp(work.started_at)}
@@ -567,6 +594,7 @@ export default function WorkCalendar() {
                 ) : renderDailyTimeline()}
             </div>
 
+            {/* ── Work Detail Modal ───────────────────────────────────────────── */}
             {showWorkModal && selectedWork && (() => {
                 const roles = selectedWork.worker_role ? selectedWork.worker_role.split(", ") : [];
                 const roleColors = roles.map(r => deptColorMap[r] || '#94a3b8');
@@ -628,6 +656,47 @@ export default function WorkCalendar() {
                                         <p className="text-base md:text-lg leading-relaxed">{selectedWork.detail || "ไม่มีรายละเอียดเพิ่มเติม"}</p>
                                     </div>
 
+                                    {/* Proof Photos Section */}
+                                    {(selectedWork.start_photo_url || selectedWork.complete_photo_url) && (
+                                        <div className="rounded-xl md:rounded-2xl border border-slate-100 overflow-hidden">
+                                            <div className="bg-slate-50 px-4 py-2.5 border-b border-slate-100">
+                                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                                                    <Camera size={11} /> รูปยืนยันงาน
+                                                </span>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-3 p-3">
+                                                {selectedWork.start_photo_url ? (
+                                                    <div>
+                                                        <p className="text-[9px] font-black text-blue-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                                                            <PlayCircle size={10} /> รูปเริ่มงาน
+                                                        </p>
+                                                        <a href={selectedWork.start_photo_url} target="_blank" rel="noopener noreferrer">
+                                                            <img src={selectedWork.start_photo_url} alt="เริ่มงาน" className="w-full h-28 object-cover rounded-xl border-2 border-blue-100 hover:opacity-90 transition-opacity" />
+                                                        </a>
+                                                    </div>
+                                                ) : (
+                                                    <div className="h-28 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200 flex items-center justify-center">
+                                                        <p className="text-[9px] font-bold text-slate-300 text-center">ยังไม่มีรูปเริ่มงาน</p>
+                                                    </div>
+                                                )}
+                                                {selectedWork.complete_photo_url ? (
+                                                    <div>
+                                                        <p className="text-[9px] font-black text-emerald-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                                                            <CheckCircle2 size={10} /> รูปเสร็จงาน
+                                                        </p>
+                                                        <a href={selectedWork.complete_photo_url} target="_blank" rel="noopener noreferrer">
+                                                            <img src={selectedWork.complete_photo_url} alt="เสร็จงาน" className="w-full h-28 object-cover rounded-xl border-2 border-emerald-100 hover:opacity-90 transition-opacity" />
+                                                        </a>
+                                                    </div>
+                                                ) : (
+                                                    <div className="h-28 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200 flex items-center justify-center">
+                                                        <p className="text-[9px] font-bold text-slate-300 text-center">ยังไม่มีรูปเสร็จงาน</p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+
                                     {(selectedWork.started_at || selectedWork.completed_at) && (
                                         <div className="rounded-xl md:rounded-2xl border border-slate-100 overflow-hidden">
                                             <div className="bg-slate-50 px-4 py-2.5 flex items-center justify-between border-b border-slate-100">
@@ -670,13 +739,21 @@ export default function WorkCalendar() {
 
                                 <div className="flex gap-3 mt-5 md:mt-10">
                                     {selectedWork.status === 'pending' && (
-                                        <button onClick={() => updateWorkStatus(selectedJobGroup.map(w => w.id), 'inprogress')}
-                                            className="flex-[2] py-3.5 md:py-4 rounded-xl md:rounded-2xl text-white font-black text-sm shadow-lg active:scale-95 transition-all"
-                                            style={{ backgroundColor: mainColor }}>เริ่มดำเนินงาน</button>
+                                        <button
+                                            onClick={() => handleStatusAction(selectedJobGroup.map(w => w.id), 'inprogress', selectedWork.detail)}
+                                            className="flex-[2] py-3.5 md:py-4 rounded-xl md:rounded-2xl text-white font-black text-sm shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"
+                                            style={{ backgroundColor: mainColor }}
+                                        >
+                                            <Camera size={16} /> เริ่มดำเนินงาน
+                                        </button>
                                     )}
                                     {selectedWork.status === 'inprogress' && (
-                                        <button onClick={() => updateWorkStatus(selectedJobGroup.map(w => w.id), 'complete')}
-                                            className="flex-[2] bg-emerald-600 py-3.5 md:py-4 rounded-xl md:rounded-2xl text-white font-black text-sm shadow-lg hover:bg-emerald-700 active:scale-95 transition-all">เสร็จสิ้น</button>
+                                        <button
+                                            onClick={() => handleStatusAction(selectedJobGroup.map(w => w.id), 'complete', selectedWork.detail)}
+                                            className="flex-[2] bg-emerald-600 py-3.5 md:py-4 rounded-xl md:rounded-2xl text-white font-black text-sm shadow-lg hover:bg-emerald-700 active:scale-95 transition-all flex items-center justify-center gap-2"
+                                        >
+                                            <Camera size={16} /> เสร็จสิ้น
+                                        </button>
                                     )}
                                     <button onClick={() => setShowWorkModal(false)} className="flex-1 py-3.5 md:py-4 bg-slate-100 rounded-xl md:rounded-2xl font-black text-sm text-slate-500 hover:bg-slate-200 transition-colors active:scale-95">ย้อนกลับ</button>
                                 </div>
@@ -685,6 +762,14 @@ export default function WorkCalendar() {
                     </div>
                 );
             })()}
+            {photoModal && (
+                <PhotoUploadModal
+                    mode={photoModal.mode}
+                    jobDetail={photoModal.detail}
+                    onConfirm={handlePhotoConfirm}
+                    onCancel={() => setPhotoModal(null)}
+                />
+            )}
         </div>
     );
 }

@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import React, { useMemo, useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
@@ -8,9 +8,11 @@ import {
     Pencil, Trash2, Maximize, Minimize, Users, Loader2, CheckCircle2,
     Save, Settings, User, CircleDollarSign, MapPin, Undo2,
     PlusIcon, ChevronDown, Check, AlertTriangle, TrendingDown,
-    CalendarRange, PlayCircle, Timer
+    CalendarRange, PlayCircle, Timer, Camera
 } from 'lucide-react';
 import Link from "next/link";
+import PhotoUploadModal from "@/components/PhotoUploadModal";
+import { uploadWorkPhoto } from "@/lib/uploadWorkPhoto";
 
 interface Department { id: string; name: string; color_code: string; }
 
@@ -40,6 +42,8 @@ interface WorkScheduleItem {
     lng: number | null;
     started_at: string | null;
     completed_at: string | null;
+    start_photo_url?: string | null;
+    complete_photo_url?: string | null;
 }
 
 interface WorkForm {
@@ -96,15 +100,12 @@ function calcDuration(start: string | null | undefined, end: string | null | und
 }
 
 interface LongdoResult { lat: number; lon: number; name: string; address: string; }
-
 const LONGDO_KEY = '7ab7d7d3dbf947cebbdae10203740d2a';
 
 const searchPlaces = async (query: string): Promise<LongdoResult[]> => {
     if (!query.trim() || query.length < 2) return [];
     try {
-        const res = await fetch(
-            `https://search.longdo.com/mapsearch/json/search?keyword=${encodeURIComponent(query)}&limit=6&key=${LONGDO_KEY}`
-        );
+        const res = await fetch(`https://search.longdo.com/mapsearch/json/search?keyword=${encodeURIComponent(query)}&limit=6&key=${LONGDO_KEY}`);
         const data = await res.json();
         return (data.data ?? []).map((item: { lat: number; lon: number; name: string; address?: string }) => ({
             lat: item.lat, lon: item.lon, name: item.name, address: item.address ?? '',
@@ -134,6 +135,9 @@ export default function HomePage() {
     const [locationSearching, setLocationSearching] = useState(false);
     const locationDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
     const locationInputRef = useRef<HTMLDivElement>(null);
+
+    // Photo upload state
+    const [photoModal, setPhotoModal] = useState<{ mode: 'start' | 'complete'; id: string; detail: string } | null>(null);
 
     const initialFormState: WorkForm = {
         work_date: new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok' }).format(new Date()),
@@ -275,6 +279,33 @@ export default function HomePage() {
             : await supabase.from("work_schedule").insert([{ ...payload, status: 'pending' }]);
         if (!error && user) { setFormData(initialFormState); setEditingId(null); refreshData(user.role, user.employeeId ?? null); }
         setSubmitting(false);
+    };
+
+    // ── Photo-aware status update ──────────────────────────────────────────────
+    const handleStatusAction = (id: string, status: 'inprogress' | 'complete', detail: string) => {
+        setShowWorkModal(false);
+        setPhotoModal({ mode: status === 'inprogress' ? 'start' : 'complete', id, detail });
+    };
+
+    const handlePhotoConfirm = async (file: File) => {
+        if (!photoModal) return;
+        const { mode, id } = photoModal;
+
+        const photoUrl = await uploadWorkPhoto(supabase, file, id, mode);
+
+        const status = mode === 'start' ? 'inprogress' : 'complete';
+        const updateData: Record<string, string> = { status };
+        if (mode === 'start') {
+            updateData.started_at = new Date().toISOString();
+            updateData.start_photo_url = photoUrl;
+        } else {
+            updateData.completed_at = new Date().toISOString();
+            updateData.complete_photo_url = photoUrl;
+        }
+
+        await supabase.from("work_schedule").update(updateData).eq("id", id);
+        if (user) refreshData(user.role, user.employeeId ?? null);
+        setPhotoModal(null);
     };
 
     const filteredWork = useMemo(() => {
@@ -525,7 +556,6 @@ export default function HomePage() {
 
                         return (
                             <div key={item.id} className={`relative bg-white rounded-[1.5rem] md:rounded-[2.5rem] shadow-sm border-2 border-slate-50 overflow-hidden flex flex-col md:flex-row items-stretch transition-all hover:shadow-md ${isComplete ? 'opacity-70 grayscale-[0.5]' : ''}`}>
-            
                                 <div className="absolute left-0 top-0 bottom-0 w-2 z-10" style={{
                                     background: roles.length > 1
                                         ? `linear-gradient(to bottom, ${roles.map(r => deptColorMap[r] || '#94a3b8').join(", ")})`
@@ -616,6 +646,7 @@ export default function HomePage() {
                 </div>
             </section>
 
+            {/* ── Work Detail Modal ───────────────────────────────────────────── */}
             {showWorkModal && selectedWork && (
                 <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[200] flex items-end md:items-center justify-center p-0 md:p-4" onClick={() => setShowWorkModal(false)}>
                     <div className="bg-white rounded-t-[2rem] md:rounded-[2.5rem] w-full md:max-w-lg shadow-2xl relative overflow-hidden md:animate-in md:zoom-in-95 md:duration-200" onClick={e => e.stopPropagation()}>
@@ -669,6 +700,7 @@ export default function HomePage() {
                                         </div>
                                     )}
                                 </div>
+
                                 <div className="space-y-2">
                                     <p className="text-[10px] text-slate-400 uppercase font-black tracking-wider ml-2">ทีมช่างที่ปฏิบัติงาน</p>
                                     <div className="grid grid-cols-1 gap-2">
@@ -694,10 +726,53 @@ export default function HomePage() {
                                         }) : <div className="p-4 bg-slate-50 rounded-xl md:rounded-2xl border-2 border-dashed border-slate-200 text-center text-slate-400 font-bold text-sm">ยังไม่มีการมอบหมายช่าง</div>}
                                     </div>
                                 </div>
+
                                 <div className="p-5 md:p-8 rounded-[1.5rem] md:rounded-[2rem] bg-slate-900 text-white font-bold shadow-xl shadow-slate-200">
                                     <p className="text-[10px] opacity-50 uppercase mb-2 font-black tracking-widest">รายละเอียดงาน</p>
                                     <p className="text-base md:text-lg leading-relaxed">{selectedWork.detail || "ไม่มีรายละเอียดเพิ่มเติม"}</p>
                                 </div>
+
+                                {/* Proof Photos Section */}
+                                {(selectedWork.start_photo_url || selectedWork.complete_photo_url) && (
+                                    <div className="rounded-xl md:rounded-2xl border border-slate-100 overflow-hidden">
+                                        <div className="bg-slate-50 px-4 py-2.5 border-b border-slate-100">
+                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                                                <Camera size={11} /> รูปยืนยันงาน
+                                            </span>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-3 p-3">
+                                            {selectedWork.start_photo_url ? (
+                                                <div>
+                                                    <p className="text-[9px] font-black text-blue-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                                                        <PlayCircle size={10} /> รูปเริ่มงาน
+                                                    </p>
+                                                    <a href={selectedWork.start_photo_url} target="_blank" rel="noopener noreferrer">
+                                                        <img src={selectedWork.start_photo_url} alt="เริ่มงาน" className="w-full h-28 object-cover rounded-xl border-2 border-blue-100 hover:opacity-90 transition-opacity" />
+                                                    </a>
+                                                </div>
+                                            ) : (
+                                                <div className="h-28 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200 flex items-center justify-center">
+                                                    <p className="text-[9px] font-bold text-slate-300 text-center">ยังไม่มีรูปเริ่มงาน</p>
+                                                </div>
+                                            )}
+                                            {selectedWork.complete_photo_url ? (
+                                                <div>
+                                                    <p className="text-[9px] font-black text-emerald-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                                                        <CheckCircle2 size={10} /> รูปเสร็จงาน
+                                                    </p>
+                                                    <a href={selectedWork.complete_photo_url} target="_blank" rel="noopener noreferrer">
+                                                        <img src={selectedWork.complete_photo_url} alt="เสร็จงาน" className="w-full h-28 object-cover rounded-xl border-2 border-emerald-100 hover:opacity-90 transition-opacity" />
+                                                    </a>
+                                                </div>
+                                            ) : (
+                                                <div className="h-28 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200 flex items-center justify-center">
+                                                    <p className="text-[9px] font-bold text-slate-300 text-center">ยังไม่มีรูปเสร็จงาน</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+
                                 {(selectedWork.started_at || selectedWork.completed_at) && (
                                     <div className="rounded-xl md:rounded-2xl border border-slate-100 overflow-hidden">
                                         <div className="bg-slate-50 px-4 py-2.5 flex items-center justify-between border-b border-slate-100">
@@ -740,24 +815,34 @@ export default function HomePage() {
 
                             <div className="flex gap-3 mt-6 md:mt-10">
                                 {selectedWork.status === 'pending' && (
-                                    <button onClick={async () => {
-                                        await supabase.from("work_schedule").update({ status: 'inprogress', started_at: new Date().toISOString() }).eq("id", selectedWork.id);
-                                        if (user) refreshData(user.role, user.employeeId ?? null);
-                                        setShowWorkModal(false);
-                                    }} className="flex-[2] py-3.5 md:py-4 bg-blue-600 rounded-xl md:rounded-2xl text-white font-black text-sm shadow-lg hover:bg-blue-700 active:scale-95 transition-all">เริ่มดำเนินงาน</button>
+                                    <button
+                                        onClick={() => handleStatusAction(selectedWork.id, 'inprogress', selectedWork.detail)}
+                                        className="flex-[2] py-3.5 md:py-4 bg-blue-600 rounded-xl md:rounded-2xl text-white font-black text-sm shadow-lg hover:bg-blue-700 active:scale-95 transition-all flex items-center justify-center gap-2"
+                                    >
+                                        <Camera size={16} /> เริ่มดำเนินงาน
+                                    </button>
                                 )}
                                 {selectedWork.status === 'inprogress' && (
-                                    <button onClick={async () => {
-                                        await supabase.from("work_schedule").update({ status: 'complete', completed_at: new Date().toISOString() }).eq("id", selectedWork.id);
-                                        if (user) refreshData(user.role, user.employeeId ?? null);
-                                        setShowWorkModal(false);
-                                    }} className="flex-[2] bg-emerald-600 py-3.5 md:py-4 rounded-xl md:rounded-2xl text-white font-black text-sm shadow-lg hover:bg-emerald-700 active:scale-95 transition-all">เสร็จสิ้น</button>
+                                    <button
+                                        onClick={() => handleStatusAction(selectedWork.id, 'complete', selectedWork.detail)}
+                                        className="flex-[2] bg-emerald-600 py-3.5 md:py-4 rounded-xl md:rounded-2xl text-white font-black text-sm shadow-lg hover:bg-emerald-700 active:scale-95 transition-all flex items-center justify-center gap-2"
+                                    >
+                                        <Camera size={16} /> เสร็จสิ้น
+                                    </button>
                                 )}
                                 <button onClick={() => setShowWorkModal(false)} className="flex-1 py-3.5 md:py-4 bg-slate-100 rounded-xl md:rounded-2xl font-black text-sm text-slate-500 hover:bg-slate-200 transition-colors active:scale-95">ย้อนกลับ</button>
                             </div>
                         </div>
                     </div>
                 </div>
+            )}
+            {photoModal && (
+                <PhotoUploadModal
+                    mode={photoModal.mode}
+                    jobDetail={photoModal.detail}
+                    onConfirm={handlePhotoConfirm}
+                    onCancel={() => setPhotoModal(null)}
+                />
             )}
         </main>
     );

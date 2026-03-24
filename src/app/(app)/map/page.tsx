@@ -5,10 +5,12 @@ import dynamic from 'next/dynamic';
 import {
   Navigation, Loader2, ExternalLink, X, Clock, MapPin,
   Building2, Search, ChevronDown, LocateFixed, PlayCircle, CheckCircle2,
-  Timer, CalendarRange,
+  Timer, CalendarRange, Camera,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import type { MapTask, MapComponentProps } from './MapComponent';
+import PhotoUploadModal from '@/components/PhotoUploadModal';
+import { uploadWorkPhoto } from '@/lib/uploadWorkPhoto';
 
 interface Employee {
   id: string;
@@ -32,6 +34,8 @@ interface WorkScheduleRow {
   started_at: string | null;
   completed_at: string | null;
   employee_ids: string[] | null;
+  start_photo_url?: string | null;
+  complete_photo_url?: string | null;
 }
 
 interface Department { name: string; color_code: string; }
@@ -146,6 +150,9 @@ export default function MapPage() {
   const [showModal, setShowModal] = useState(false);
   const [selectedWork, setSelectedWork] = useState<WorkScheduleRow | null>(null);
 
+  // Photo upload state
+  const [photoModal, setPhotoModal] = useState<{ mode: 'start' | 'complete'; id: string; detail: string } | null>(null);
+
   // ────────────────────────────────────────────────
   // Init
   // ────────────────────────────────────────────────
@@ -238,32 +245,44 @@ export default function MapPage() {
   }, []);
 
   // ────────────────────────────────────────────────
-  // Update status — บันทึก started_at / completed_at
+  // Photo-aware status update
   // ────────────────────────────────────────────────
-  const updateStatus = async (id: string, status: 'pending' | 'inprogress' | 'complete') => {
+  const handleStatusAction = (id: string, status: 'inprogress' | 'complete', detail: string) => {
+    setShowModal(false);
+    setPhotoModal({ mode: status === 'inprogress' ? 'start' : 'complete', id, detail });
+  };
+
+  const handlePhotoConfirm = async (file: File) => {
+    if (!photoModal) return;
+    const { mode, id } = photoModal;
+
+    const photoUrl = await uploadWorkPhoto(supabase, file, id, mode);
+
+    const status = mode === 'start' ? 'inprogress' : 'complete';
     const updates: Record<string, string> = { status };
-    if (status === 'inprogress') updates.started_at = new Date().toISOString();
-    if (status === 'complete') updates.completed_at = new Date().toISOString();
+    if (mode === 'start') {
+      updates.started_at = new Date().toISOString();
+      updates.start_photo_url = photoUrl;
+    } else {
+      updates.completed_at = new Date().toISOString();
+      updates.complete_photo_url = photoUrl;
+    }
 
     await supabase.from('work_schedule').update(updates).eq('id', id);
 
-    // works list: complete → ลบออก
     setWorks(prev =>
       status === 'complete'
         ? prev.filter(w => w.id !== id)
-        : prev.map(w => w.id === id ? { ...w, status, ...updates } : w)
+        : prev.map(w => w.id === id ? { ...w, status, ...updates } as WorkScheduleRow : w)
     );
-    // mapTasks: อัพเดต status เสมอ ไม่ลบ เพื่อให้แผนที่แสดงหมุดสีเขียว ✓
     setMapTasks(prev => prev.map(t => t.id === id ? { ...t, status } : t));
-    // orderedTasks: complete → ลบออก, inprogress → อัพเดต
     setOrderedTasks(prev =>
       status === 'complete'
         ? prev.filter(t => t.id !== id)
         : prev.map(t => t.id === id ? { ...t, status } : t)
     );
-    // อัปเดต selectedWork ที่เปิด modal อยู่ด้วย
     setSelectedWork(prev => prev?.id === id ? { ...prev, status, ...updates } as WorkScheduleRow : prev);
-    setShowModal(false);
+    setPhotoModal(null);
   };
 
   // ────────────────────────────────────────────────
@@ -608,6 +627,47 @@ export default function MapPage() {
                     <p className="text-base leading-relaxed">{selectedWork.detail || 'ไม่มีรายละเอียดเพิ่มเติม'}</p>
                   </div>
 
+                  {/* รูปยืนยันงาน */}
+                  {(selectedWork.start_photo_url || selectedWork.complete_photo_url) && (
+                    <div className="rounded-2xl border border-slate-100 overflow-hidden">
+                      <div className="bg-slate-50 px-4 py-2.5 border-b border-slate-100">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                          <Camera size={11} /> รูปยืนยันงาน
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3 p-3">
+                        {selectedWork.start_photo_url ? (
+                          <div>
+                            <p className="text-[9px] font-black text-blue-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                              <PlayCircle size={10} /> รูปเริ่มงาน
+                            </p>
+                            <a href={selectedWork.start_photo_url} target="_blank" rel="noopener noreferrer">
+                              <img src={selectedWork.start_photo_url} alt="เริ่มงาน" className="w-full h-28 object-cover rounded-xl border-2 border-blue-100 hover:opacity-90 transition-opacity" />
+                            </a>
+                          </div>
+                        ) : (
+                          <div className="h-28 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200 flex items-center justify-center">
+                            <p className="text-[9px] font-bold text-slate-300 text-center">ยังไม่มีรูปเริ่มงาน</p>
+                          </div>
+                        )}
+                        {selectedWork.complete_photo_url ? (
+                          <div>
+                            <p className="text-[9px] font-black text-emerald-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                              <CheckCircle2 size={10} /> รูปเสร็จงาน
+                            </p>
+                            <a href={selectedWork.complete_photo_url} target="_blank" rel="noopener noreferrer">
+                              <img src={selectedWork.complete_photo_url} alt="เสร็จงาน" className="w-full h-28 object-cover rounded-xl border-2 border-emerald-100 hover:opacity-90 transition-opacity" />
+                            </a>
+                          </div>
+                        ) : (
+                          <div className="h-28 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200 flex items-center justify-center">
+                            <p className="text-[9px] font-bold text-slate-300 text-center">ยังไม่มีรูปเสร็จงาน</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   {/* บันทึกเวลาดำเนินงาน */}
                   {hasTime && (
                     <div className="rounded-2xl border border-slate-100 overflow-hidden">
@@ -656,16 +716,20 @@ export default function MapPage() {
                 {/* Action buttons */}
                 <div className="flex gap-3 mt-6">
                   {selectedWork.status === 'pending' && (
-                    <button onClick={() => updateStatus(selectedWork.id, 'inprogress')}
+                    <button
+                      onClick={() => handleStatusAction(selectedWork.id, 'inprogress', selectedWork.detail)}
                       className="flex-[2] py-4 rounded-2xl text-white font-black text-sm shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"
-                      style={{ backgroundColor: mainColor }}>
-                      <PlayCircle size={18} /> เริ่มดำเนินงาน
+                      style={{ backgroundColor: mainColor }}
+                    >
+                      <Camera size={18} /> เริ่มดำเนินงาน
                     </button>
                   )}
                   {selectedWork.status === 'inprogress' && (
-                    <button onClick={() => updateStatus(selectedWork.id, 'complete')}
-                      className="flex-[2] bg-emerald-600 py-4 rounded-2xl text-white font-black text-sm shadow-lg hover:bg-emerald-700 active:scale-95 transition-all flex items-center justify-center gap-2">
-                      <CheckCircle2 size={18} /> เสร็จสิ้น
+                    <button
+                      onClick={() => handleStatusAction(selectedWork.id, 'complete', selectedWork.detail)}
+                      className="flex-[2] bg-emerald-600 py-4 rounded-2xl text-white font-black text-sm shadow-lg hover:bg-emerald-700 active:scale-95 transition-all flex items-center justify-center gap-2"
+                    >
+                      <Camera size={18} /> เสร็จสิ้น
                     </button>
                   )}
                   <button onClick={() => setShowModal(false)} className="flex-1 py-4 bg-slate-100 rounded-2xl font-black text-sm text-slate-500 hover:bg-slate-200 active:scale-95 transition-all">ย้อนกลับ</button>
@@ -675,6 +739,14 @@ export default function MapPage() {
           </div>
         );
       })()}
+      {photoModal && (
+        <PhotoUploadModal
+          mode={photoModal.mode}
+          jobDetail={photoModal.detail}
+          onConfirm={handlePhotoConfirm}
+          onCancel={() => setPhotoModal(null)}
+        />
+      )}
     </div>
   );
 }

@@ -518,9 +518,9 @@ export default function HomePage() {
                             </div>
                         </div>
 
-                        <div className="flex flex-col gap-1.5">
+                        <div className="flex flex-col gap-1.5"> 
                             <label className="text-[10px] font-black uppercase opacity-50 ml-2 tracking-wider">รายละเอียดงาน</label>
-                            <textarea rows={3} className="p-3 md:p-5 bg-slate-50 border-2 rounded-xl md:rounded-[1.5rem] font-bold w-full focus:bg-white focus:border-slate-900 transition-all outline-none text-sm" placeholder="ระบุสิ่งที่ต้องทำ..." value={formData.detail} onChange={e => setFormData({ ...formData, detail: e.target.value })} />
+                            <textarea rows={3} required className="p-3 md:p-5 bg-slate-50 border-2 rounded-xl md:rounded-[1.5rem] font-bold w-full focus:bg-white focus:border-slate-900 transition-all outline-none text-sm" placeholder="ระบุสิ่งที่ต้องทำ..." value={formData.detail} onChange={e => setFormData({ ...formData, detail: e.target.value })} />
                         </div>
 
                         <button type="submit" disabled={submitting} className={`w-full py-3.5 md:py-5 rounded-[1.5rem] md:rounded-[2rem] font-black text-base md:text-xl flex items-center justify-center gap-2.5 shadow-lg transition-all ${editingId ? 'bg-orange-500 hover:bg-orange-600' : 'bg-slate-900 hover:bg-slate-800'} text-white active:scale-[0.98]`}>
